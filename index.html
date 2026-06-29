@@ -106,6 +106,7 @@
     <button data-tab="dash" class="on">Tableau de bord</button>
     <button data-tab="acq">Acquisition mensuelle</button>
     <button data-tab="cash">Trésorerie</button>
+    <button data-tab="cashreal">Trésorerie réelle</button>
   </div>
 </header>
 
@@ -161,6 +162,24 @@
         <div class="foot">Cash fin = Cash début + CA net − COGS − Salaires − Logiciels − G&A − Compta − Sales tax − Capex − Remb. BPI − Meta (M-1). « Cash avant Meta » = Cash fin + virement Meta (le solde si Meta n'avait pas encore été débité).</div></div>
     </section>
 
+    <section class="tabpane" id="pane-cashreal">
+      <p class="note" style="margin:0 0 14px">Identique à l'onglet Trésorerie, mais le décompte est recalculé avec ton <b>CAC réel saisi mois par mois</b> (clients acquis = budget Meta ÷ CAC réel). Les mois laissés vides utilisent le CAC hypothèse (<b id="cacrealHint"></b>). Saisis tes CAC réels au fil de l'eau pour suivre la trésorerie au plus juste.</p>
+      <div class="bulk">
+        <div class="b"><label>Appliquer un CAC à tous les mois ($)</label><input id="bk_cacreal" type="number" step="1" placeholder="ex. 104"></div>
+        <button id="bk_cacreal_apply">Remplir tous les mois</button>
+        <button id="bk_cacreal_clear" style="background:#fff;color:var(--muted);border:1px solid var(--line2)">↺ Vider (= CAC hypothèse)</button>
+      </div>
+      <div class="panel"><h2>CAC réel par mois</h2>
+        <div class="scroll"><table class="grid" id="cacRealTable"></table></div></div>
+      <div class="kpis" id="cashKpisR"></div>
+      <div class="panel"><h2>Courbe de trésorerie (CAC réel)</h2>
+        <div class="chartwrap lg"><canvas id="cashBigR"></canvas></div></div>
+      <div class="panel"><h2>Détail mensuel de trésorerie (CAC réel)</h2>
+        <div class="scroll"><table class="dt" id="cashTableR"></table></div></div>
+      <div class="panel"><h2>Décomposition du cash (CAC réel) — sorties de banque mois par mois</h2>
+        <div class="scroll"><table class="dt" id="cashDecompR"></table></div></div>
+    </section>
+
   </main>
 </div>
 <input type="file" id="importFile" accept="application/json" style="display:none">
@@ -169,7 +188,8 @@
 /* ============ MOTEUR : Meta÷CAC → clients → produits → MRR ============ */
 /* WK = équivalent mensuel du prix récurrent. Weekly bascule sur un prix MENSUEL après la 1ère semaine → facteur 1 (et non ×4,33). Quarterly = /3, Yearly = /12. */
 const LAG=[1,1,3,12], WK=[1,1,0.333333333333333,0.0833333333333333];
-function runModel(A){
+function runModel(A,opts){
+  opts=opts||{};
   const N=A.horizon, yr=m=>Math.floor(m/12);
   const meta=[]; for(let m=0;m<N;m++)meta.push(A.meta[m]??0);
   const P=A.products;
@@ -181,7 +201,8 @@ function runModel(A){
   const upPool=A.upsells.map(()=>0);   // pool d'abonnés par upsell récurrent
   const g=(a,m)=>m<0?0:a[m];
   for(let m=0;m<N;m++){
-    clients[m]=A.cac>0?meta[m]/A.cac:0;
+    const _cac=(opts.cacArr&&opts.cacArr[m]>0)?opts.cacArr[m]:A.cac;   // CAC réel par mois si fourni, sinon CAC hypothèse
+    clients[m]=_cac>0?meta[m]/_cac:0;
     let cohortRev=0,cohortAct=0;
     for(let k=0;k<4;k++){
       const newc=clients[m]*P[k].mix;
@@ -278,7 +299,7 @@ const DEFAULTS={
     {name:'Ebook',          base:'Nouveaux', attach:0.12, price:9.99,  recur:false, churn:0},
     {name:'VIP Support',    base:'Nouveaux', attach:0.08, price:39.99, recur:false, churn:0},
     {name:'Calorie tracker',base:'Nouveaux', attach:0.10, price:39.99, recur:true,  churn:0.06}],
-  meta:mkMeta(), metaGrowthByYear:{},
+  meta:mkMeta(), metaGrowthByYear:{}, cacReal:[],
   payfee:0, hostingPerSub:0, support:0, supportG:0, content:0, contentG:0,
   sal:0, salG:0, soft:0, softG:0, ga:0, gaG:0, da:0, capex:0,
   accounting:0, salesTax:0,
@@ -290,7 +311,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="kYTfxoUPjD3mEemF5Juf/Q==.sarJa7hh9Et3vnJN.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";
+const HOSTED_DATA="qui4PutP0T4XFn5yuZRuzA==.F0/HBJ9T1Y4fcGYJ.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -648,10 +669,70 @@ function renderTreasury(){
   document.getElementById('cashDecomp').innerHTML=dh+'</tbody>';
 }
 
+/* ===== Onglet « Trésorerie réelle » : même décompte, mais CAC réel saisi par mois ===== */
+let cashBigR;
+function tresKpiHTML(Rx){
+  const N=Rx.months.length, mc=Math.min(...Rx.cash_end), mi=Rx.cash_end.indexOf(mc), rw=Rx.cash_end.findIndex(v=>v<0);
+  const cards=[
+    {k:'Trésorerie de départ',v:fShort(A.startcash),d:Rx.months[0]},
+    {k:'Point bas',v:fShort(mc),d:Rx.months[mi],cls:mc<0?'neg':'pos'},
+    {k:'Trésorerie finale',v:fShort(Rx.cash_end[N-1]),d:Rx.months[N-1]},
+    {k:'Runway',v:rw<0?'> horizon':(rw+1)+' mois',d:rw<0?'cash jamais négatif':'négatif en '+Rx.months[rw],cls:rw<0?'pos':'neg'},
+    {k:'Cash net généré',v:fShort(Rx.cash_end[N-1]-A.startcash),d:'sur '+N+' mois',cls:(Rx.cash_end[N-1]-A.startcash)>=0?'pos':'neg'},
+  ];
+  return cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+}
+function tresChartCfg(Rx){return {type:'line',data:{labels:Rx.months,datasets:[
+    {label:'Trésorerie (avec BPI)',data:Rx.cash_end,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
+    {label:'Sans prêt BPI',data:Rx.cash_nobpi,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
+    options:{...opts(fShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}};}
+function tresDetailHTML(Rx){
+  let h='<thead><tr><th>Mois</th><th>CA net</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
+  for(let i=0;i<Rx.months.length;i++)h+=`<tr><td>${Rx.months[i]}</td><td>${fUSD(Rx.net_rev[i])}</td><td class="${Rx.ebitda[i]<0?'neg':''}">${fUSD(Rx.ebitda[i])}</td><td class="neg">${fUSD(Rx.capex[i])}</td><td class="${Rx.bpi_cf[i]<0?'neg':''}">${Rx.bpi_cf[i]?fUSD(Rx.bpi_cf[i]):'—'}</td><td class="${Rx.net_cf[i]<0?'neg':''}">${fUSD(Rx.net_cf[i])}</td><td class="${Rx.cash_end[i]<0?'neg':''}"><b>${fUSD(Rx.cash_end[i])}</b></td></tr>`;
+  return h+'</tbody>';
+}
+function tresDecompHTML(Rx){
+  let dh='<thead><tr><th>Mois</th><th>Cash début</th><th>+ CA net</th><th>− COGS</th><th>− Salaires</th><th>− Logiciels</th><th>− G&A</th><th>− Compta</th><th>− Sales tax</th><th>− Capex</th><th>− Remb. BPI</th><th>Cash avant Meta</th><th>− Meta payé (M-1)</th><th>= Cash fin</th></tr></thead><tbody>';
+  const cell=v=>`<td class="${v<0?'neg':''}">${v?fUSD(v):'—'}</td>`;
+  for(let i=0;i<Rx.months.length;i++){
+    const metaCash=Rx.meta[i]+Rx.timing[i], avant=Rx.cash_end[i]-metaCash;
+    dh+=`<tr><td>${Rx.months[i]}</td><td><b>${fUSD(Rx.cash_beg[i])}</b></td><td style="color:#0F6E56">${fUSD(Rx.net_rev[i])}</td>`
+      +cell(Rx.total_cogs[i])+cell(Rx.salaries[i])+cell(Rx.software[i])+cell(Rx.ga[i])+cell(Rx.accounting[i])+cell(Rx.salestax[i])+cell(Rx.capex[i])+cell(Rx.bpi_cf[i])
+      +`<td class="${avant<0?'neg':''}">${fUSD(avant)}</td>`+cell(metaCash)+`<td class="${Rx.cash_end[i]<0?'neg':''}"><b>${fUSD(Rx.cash_end[i])}</b></td></tr>`;
+  }
+  return dh+'</tbody>';
+}
+function buildCacRealTable(){
+  A.cacReal=A.cacReal||[];
+  const hint=document.getElementById('cacrealHint'); if(hint)hint.textContent=fUSD(A.cac);
+  const N=A.horizon, start=new Date(A.startY,A.startM-1,1);
+  let h='<thead><tr><th>Mois</th><th>Budget Meta ($)</th><th>CAC réel ($)</th><th>Clients acquis</th></tr></thead><tbody>';
+  for(let m=0;m<N;m++){
+    const d=new Date(start.getFullYear(),start.getMonth()+m,1);
+    const lbl=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const cv=A.cacReal[m]>0?A.cacReal[m]:0, cacM=cv>0?cv:A.cac, nc=cacM>0?(A.meta[m]||0)/cacM:0;
+    h+=`<tr><td>${lbl}</td><td class="calc">${fInt(A.meta[m]||0)}</td><td><input type="number" step="1" data-cm="${m}" value="${cv>0?cv:''}" placeholder="${A.cac}"></td><td class="calc" id="ncr-${m}">${fInt(nc)}</td></tr>`;
+  }
+  const t=document.getElementById('cacRealTable'); t.innerHTML=h+'</tbody>';
+  t.oninput=e=>{const el=e.target; if(el.dataset.cm===undefined)return; const m=+el.dataset.cm; A.cacReal[m]=parseFloat(el.value)||0;
+    const cacM=A.cacReal[m]>0?A.cacReal[m]:A.cac, c2=document.getElementById('ncr-'+m); if(c2)c2.textContent=fInt(cacM>0?(A.meta[m]||0)/cacM:0);
+    clearTimeout(debounce); debounce=setTimeout(()=>{saveState('auto');refreshCashRealOutputs();},220);};
+}
+function refreshCashRealOutputs(){
+  const R2=runModel(A,{cacArr:A.cacReal});
+  document.getElementById('cashKpisR').innerHTML=tresKpiHTML(R2);
+  if(typeof Chart!=='undefined'){cashBigR&&cashBigR.destroy(); cashBigR=new Chart(document.getElementById('cashBigR'),tresChartCfg(R2));}
+  document.getElementById('cashTableR').innerHTML=tresDetailHTML(R2);
+  document.getElementById('cashDecompR').innerHTML=tresDecompHTML(R2);
+}
+function renderCashReal(){ buildCacRealTable(); refreshCashRealOutputs(); }
+document.getElementById('bk_cacreal_apply').onclick=()=>{const v=parseFloat(document.getElementById('bk_cacreal').value)||0; if(v<=0){alert('Entre un CAC supérieur à 0.');return;} A.cacReal=[]; for(let m=0;m<A.horizon;m++)A.cacReal[m]=v; renderCashReal(); saveState('manuel');};
+document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCashReal(); saveState('manuel');};
+
 function recompute(){
   R=runModel(A);
   document.getElementById('acqfoot').textContent='Total clients acquis sur l\'horizon : '+fInt(R.clients.reduce((a,b)=>a+b,0))+' · MRR base de départ : '+fUSD(A.startMRR)+'.';
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();}
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();}
   saveState('auto');
 }
 
@@ -684,7 +765,7 @@ document.querySelectorAll('.pnltoggle button').forEach(b=>b.onclick=()=>{pnlMode
 document.getElementById('tabbar').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+tab));
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}};
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}};
 document.getElementById('csvbtn').onclick=()=>{
   const keys=['months','meta_spend','clients','active_subs','mrr_legacy','mrr_new','mrr_total','upsell_rev','net_rev','total_cogs','gross_profit','meta','total_opex','ebitda','net_cf','cash_end'];
   let csv=keys.join(',')+'\n';
