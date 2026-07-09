@@ -196,25 +196,35 @@ function runModel(A,opts){
   const upM=A.upMtoY, upQ=A.upQtoY;
   /* rétention : les mensuels/trimestriels retenus qui migrent vers l'annuel quittent leur pool */
   const ret=[1-P[0].churn,(1-P[1].churn)*(1-upM),(1-P[2].churn)*(1-upQ),1-P[3].churn];
+  const mEq=k=>P[k].monthly/(P[k].cycle||1);         // équivalent MENSUEL (accrual/MRR) = prix par cycle ÷ cycle
+  const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));   // cycle de facturation en mois
+  const ph=P.map((p,k)=>new Array(CYC[k]).fill(0));  // buckets d'encaissement : ph[k][j] = clients qui facturent dans j mois
   const act=[[],[],[],[]],rev=[[],[],[],[]];
-  const legArr=[],newArr=[],totArr=[],subs=[],clients=[],upgArr=[],upsArr=[],netArr=[];
+  const legArr=[],newArr=[],totArr=[],subs=[],clients=[],upgArr=[],upsArr=[],netArr=[],cashArr=[];
   const upPool=A.upsells.map(()=>0);   // pool d'abonnés par upsell récurrent
   const g=(a,m)=>m<0?0:a[m];
   for(let m=0;m<N;m++){
     const _cac=(opts.cacArr&&opts.cacArr[m]>0)?opts.cacArr[m]:A.cac;   // CAC réel par mois si fourni, sinon CAC hypothèse
     clients[m]=_cac>0?meta[m]/_cac:0;
-    let cohortRev=0,cohortAct=0;
+    let cohortRev=0,cohortAct=0,cohortCash=0;
     for(let k=0;k<4;k++){
       const newc=clients[m]*P[k].mix;
       const retained=g(act[k],m-1)*ret[k];        // retenus = parc précédent × rétention
       act[k][m]=retained+newc;
-      rev[k][m]=newc*P[k].first + retained*P[k].monthly;  // nouveaux paient le 1er prix, retenus le prix mensuel
+      rev[k][m]=newc*P[k].first + retained*mEq(k); // ACCRUAL (MRR lissé) : nouveaux = 1er prix, retenus = équivalent mensuel
       cohortRev+=rev[k][m]; cohortAct+=act[k][m];
+      /* CASH ENCAISSÉ RÉEL : intro à l'inscription (couvre le 1er cycle), puis prix par cycle tous les `cycle` mois */
+      const L=CYC[k];
+      for(let j=0;j<L;j++) ph[k][j]*=ret[k];                       // churn mensuel sur les buckets
+      const billers=ph[k][0];                                       // ceux dont l'échéance tombe ce mois
+      cohortCash += newc*P[k].first + billers*P[k].monthly;         // intro (nouveaux) + renouvellements (prix par cycle)
+      for(let j=0;j<L-1;j++) ph[k][j]=ph[k][j+1];                    // le temps avance d'un mois
+      ph[k][L-1]=billers+newc;                                       // renouvelés + nouveaux : prochaine échéance dans `cycle` mois
     }
     /* pool upgrade-to-yearly : migrants des mensuels+trimestriels, paie le prix mensuel annuel, churn propre */
     const mig=g(act[1],m-1)*(1-P[1].churn)*upM+g(act[2],m-1)*(1-P[2].churn)*upQ;
     upgArr[m]=g(upgArr,m-1)*(1-P[3].churn)+mig;   // les migrés churnent au churn du produit Yearly
-    const upgRev=upgArr[m]*P[3].monthly;
+    const upgRev=upgArr[m]*mEq(3);
     legArr[m]=A.startMRR*Math.pow(1-A.churnLeg,m+1);   // le churn mord dès le 1er mois (mai) : startMRR = MRR d'entrée, déjà décrémenté
     const legSubs=A.arpuOld>0?legArr[m]/A.arpuOld:0;
     const subsTotal=legSubs+cohortAct+upgArr[m];
@@ -227,13 +237,14 @@ function runModel(A,opts){
     newArr[m]=cohortRev+upgRev;            // MRR acquis (produits + upgrade annuel)
     upsArr[m]=ups;
     totArr[m]=legArr[m]+cohortRev+upgRev;  // MRR abonnement total
-    netArr[m]=totArr[m]+ups;               // CA net = abonnement + upsells
+    netArr[m]=totArr[m]+ups;               // CA net ACCRUAL (MRR) = abonnement lissé + upsells
+    cashArr[m]=legArr[m]+cohortCash+upgRev+ups;   // CA ENCAISSÉ RÉEL (facturation par cycle)
     subs[m]=subsTotal;
   }
-  const R={months:[],mrr_legacy:legArr,mrr_new:newArr,mrr_total:totArr,upsell_rev:upsArr,net_rev:netArr,active_subs:subs,clients:clients,upg:upgArr,meta_spend:meta,
+  const R={months:[],mrr_legacy:legArr,mrr_new:newArr,mrr_total:totArr,upsell_rev:upsArr,net_rev:netArr,cash_rev:cashArr,active_subs:subs,clients:clients,upg:upgArr,meta_spend:meta,
     payfee:[],hosting:[],support:[],content:[],total_cogs:[],gross_profit:[],gross_margin:[],
     meta:[],salaries:[],software:[],ga:[],accounting:[],salestax:[],total_opex:[],ebitda:[],ebitda_margin:[],da:[],ebit:[],
-    capex:[],timing:[],bpi_cf:[],net_cf:[],cash_beg:[],cash_end:[],cash_nobpi:[],arr:[]};
+    capex:[],timing:[],bill_timing:[],bpi_cf:[],net_cf:[],cash_beg:[],cash_end:[],cash_nobpi:[],arr:[]};
   const start=new Date(A.startY,A.startM-1,1); let prev=A.startcash, prevNo=A.startcash;
   for(let m=0;m<N;m++){
     const y=yr(m), net=netArr[m];
@@ -243,7 +254,8 @@ function runModel(A,opts){
     const metaC=-meta[m], sal=-A.sal*Math.pow(1+A.salG,y), soft=-A.soft*Math.pow(1+A.softG,y), ga=-A.ga*Math.pow(1+A.gaG,y);
     const acc=-A.accounting, stax=-A.salesTax;   // montant fixe par mois
     const opex=metaC+sal+soft+ga+acc+stax, eb=gp+opex, da=-A.da, ebit=eb+da, capex=-A.capex;
-    const timing=m===0?meta[0]:meta[m]-meta[m-1], ncfOp=eb+capex+timing;
+    const timing=m===0?meta[0]:meta[m]-meta[m-1];
+    const billTiming=cashArr[m]-netArr[m], ncfOp=eb+capex+timing+billTiming;   // décalage d'encaissement : cash réel encaissé − revenu comptabilisé (accrual)
     const bpi = (m < (A.bpiMonthsLeft||0)) ? -(A.bpiMensualite||0) : 0;   // mensualité de remboursement : sortie de cash, hors EBITDA
     const ncf=ncfOp+bpi, beg=prev, end=beg+ncf; prev=end;
     const endNo=prevNo+ncfOp; prevNo=endNo;
@@ -253,7 +265,7 @@ function runModel(A,opts){
     R.total_cogs.push(cogs);R.gross_profit.push(gp);R.gross_margin.push(net?gp/net:0);
     R.meta.push(metaC);R.salaries.push(sal);R.software.push(soft);R.ga.push(ga);R.accounting.push(acc);R.salestax.push(stax);R.total_opex.push(opex);
     R.ebitda.push(eb);R.ebitda_margin.push(net?eb/net:0);R.da.push(da);R.ebit.push(ebit);
-    R.capex.push(capex);R.timing.push(timing);R.bpi_cf.push(bpi);R.net_cf.push(ncf);R.cash_beg.push(beg);R.cash_end.push(end);R.cash_nobpi.push(endNo);R.arr.push(net*12);
+    R.capex.push(capex);R.timing.push(timing);R.bill_timing.push(billTiming);R.bpi_cf.push(bpi);R.net_cf.push(ncf);R.cash_beg.push(beg);R.cash_end.push(end);R.cash_nobpi.push(endNo);R.arr.push(net*12);
   }
   return R;
 }
@@ -261,22 +273,22 @@ function runModel(A,opts){
    firstCash = prix payé à la souscription (plein, base du ROAS J0).
    recurMo = équivalent mensuel du récurrent (weekly→mensuel). LTV = 1er paiement + flux récurrent actualisé du churn. */
 function unitEcon(A){
-  const P=A.products, up=[0,A.upMtoY,A.upQtoY,0]; const cY=P[3].churn, mY=P[3].monthly;
+  const P=A.products, up=[0,A.upMtoY,A.upQtoY,0]; const mE=k=>P[k].monthly/(P[k].cycle||1); const cY=P[3].churn, mY=mE(3);
   let firstCash=0,arpu=0,ltv=0; const per=[];
   /* LTV par client : simulation mensuelle qui suit le passage en annuel (l'upgradé paie le prix Yearly et churne au churn Yearly) */
   for(let k=0;k<4;k++){
     const cK=P[k].churn,u=up[k];
     let lp=P[k].first, pK=1, pY=0;
-    for(let t=1;t<=400;t++){ const upg=pK*(1-cK)*u; pK=pK*(1-cK)*(1-u); pY=pY*(1-cY)+upg; lp+=pK*P[k].monthly+pY*mY; }
-    firstCash+=P[k].mix*P[k].first; arpu+=P[k].mix*P[k].monthly; ltv+=P[k].mix*lp;
-    per.push({name:P[k].name,first:P[k].first,monthly:P[k].monthly,ltv:lp});
+    for(let t=1;t<=400;t++){ const upg=pK*(1-cK)*u; pK=pK*(1-cK)*(1-u); pY=pY*(1-cY)+upg; lp+=pK*mE(k)+pY*mY; }
+    firstCash+=P[k].mix*P[k].first; arpu+=P[k].mix*mE(k); ltv+=P[k].mix*lp;
+    per.push({name:P[k].name,first:P[k].first,monthly:mE(k),ltv:lp});
   }
   /* Payback : mois où le cumul de revenu par client acquis (churn + passage annuel inclus) atteint le CAC */
   let cum=firstCash, payback=Infinity;
   if(cum>=A.cac) payback=0;
   else { const st=P.map(()=>({pK:1,pY:0}));
     for(let t=1;t<=400;t++){ let add=0;
-      for(let k=0;k<4;k++){ const cK=P[k].churn,u=up[k]; const upg=st[k].pK*(1-cK)*u; st[k].pK=st[k].pK*(1-cK)*(1-u); st[k].pY=st[k].pY*(1-cY)+upg; add+=P[k].mix*(st[k].pK*P[k].monthly+st[k].pY*mY); }
+      for(let k=0;k<4;k++){ const cK=P[k].churn,u=up[k]; const upg=st[k].pK*(1-cK)*u; st[k].pK=st[k].pK*(1-cK)*(1-u); st[k].pY=st[k].pY*(1-cY)+upg; add+=P[k].mix*(st[k].pK*mE(k)+st[k].pY*mY); }
       cum+=add; if(cum>=A.cac){payback=t;break;} } }
   const roas=A.cac>0?firstCash/A.cac:0, ltvcac=A.cac>0?ltv/A.cac:0;
   return {firstCash,arpu,roas,payback,ltv,ltvcac,per};
@@ -290,10 +302,10 @@ const DEFAULTS={
   startcash:500000,                       // ⚑ à remplacer
   cac:104,                                 // CAC réel
   products:[
-    {name:'Weekly',   first:5.19,  monthly:17, mix:0.08, churn:0.125},
-    {name:'Monthly',  first:9.99,  monthly:17, mix:0.14, churn:0.125},
-    {name:'Quarterly',first:19.99, monthly:17, mix:0.71, churn:0.125},
-    {name:'Yearly',   first:119.99,monthly:17, mix:0.07, churn:0.125}],
+    {name:'Weekly',   first:5.19,  monthly:43,    cycle:1,  mix:0.08, churn:0.125},
+    {name:'Monthly',  first:9.99,  monthly:43,    cycle:1,  mix:0.14, churn:0.125},
+    {name:'Quarterly',first:19.99, monthly:79.99, cycle:3,  mix:0.71, churn:0.125},
+    {name:'Yearly',   first:119.99,monthly:119.99,cycle:12, mix:0.07, churn:0.125}],
   upMtoY:0.02, upQtoY:0.01, upChurn:0.06,                 // passage en annuel post-achat
   upsells:[
     {name:'Ebook',          base:'Nouveaux', attach:0.12, price:9.99,  recur:false, churn:0},
@@ -311,7 +323,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="3WxcPjwEcJsQJg4yY8Fi/Q==.hmBn1gS/tUfkUv4t.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";
+const HOSTED_DATA="B/aJ+ddXpucwThGbdE8gAw==.J3CVZFbCAskp7OzC.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -328,14 +340,18 @@ async function decryptModel(blob,pw){const[s,i,c]=blob.split('.');
   const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:_unb64(i)},key,_unb64(c));
   return JSON.parse(new TextDecoder().decode(pt));}
 function saveState(kind){if(HOSTED)return;try{localStorage.setItem(skey(),JSON.stringify(A));lastSaved=new Date();updateSaveStatus(kind);}catch(e){const el=document.getElementById('saveStatus');if(el)el.textContent='⚠ Sauvegarde impossible';}}
+/* migration : produits sans `cycle` = ancien format où `monthly` était l'équivalent MENSUEL.
+   On ajoute le cycle (Weekly/Monthly=1, Quarterly=3, Yearly=12) et on convertit monthly en PRIX PAR CYCLE (encaissé). */
+function migrateProducts(){const def=[1,1,3,12];(A.products||[]).forEach((p,i)=>{if(p.cycle===undefined){p.cycle=def[i]||1;p.monthly=(p.monthly||0)*p.cycle;}});}
 function loadState(){try{const raw=localStorage.getItem(skey());if(!raw)return false;const o=JSON.parse(raw);A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();
   A.upsells=A.upsells||[];
   A.upsells.forEach(u=>{if(u.recur===undefined)u.recur=false; if(u.churn===undefined)u.churn=0;});
   if(!A.upsells.some(u=>(u.name||'').toLowerCase().includes('calorie'))) A.upsells.push({name:'Calorie tracker',base:'Nouveaux',attach:0.10,price:39.99,recur:true,churn:0.06});
+  migrateProducts();
   return true;}catch(e){return false;}}
 function updateSaveStatus(kind){const el=document.getElementById('saveStatus');if(!el)return;if(!lastSaved){el.textContent='Non encore enregistré';return;}const t=lastSaved.toLocaleTimeString('fr-FR');el.textContent=(kind==='manuel'?'✓ Enregistré · ':'✓ Sauvegarde auto · ')+t;}
 function exportJSON(){const blob=new Blob([JSON.stringify(A,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='oneleaf_model.json';a.click();URL.revokeObjectURL(u);}
-function importJSON(file){const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();buildAssumptions();buildAcqTable();syncBulk();recompute();saveState('manuel');}catch(e){alert('Fichier JSON invalide.');}};r.readAsText(file);}
+function importJSON(file){const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();migrateProducts();buildAssumptions();buildAcqTable();syncBulk();recompute();saveState('manuel');}catch(e){alert('Fichier JSON invalide.');}};r.readAsText(file);}
 /* génère un fichier HTML autonome avec les données CHIFFRÉES embarquées, prêt à héberger */
 async function buildHostedFile(){
   if(!(window.crypto&&crypto.subtle)){alert('Chiffrement indisponible. Génère depuis la version servie (le .command sur 127.0.0.1), pas en double-cliquant le fichier.');return;}
@@ -377,6 +393,7 @@ function showLockScreen(){
     try{const o=await decryptModel(HOSTED_DATA,document.getElementById('lockPw').value);
       A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();
       A.upsells=A.upsells||[];A.upsells.forEach(u=>{if(u.recur===undefined)u.recur=false;if(u.churn===undefined)u.churn=0;});
+      migrateProducts();
       ov.remove();buildAssumptions();buildAcqTable();syncBulk();recompute();buildYearSeg();updateScenarioSel();
     }catch(e){err.textContent='Mot de passe incorrect.';}};
   document.getElementById('lockBtn').onclick=tryUnlock;
@@ -399,6 +416,7 @@ function buildAssumptions(){
   const prows=a.products.map((p,i)=>`<tr><td><input type="text" data-path="products.${i}.name" value="${p.name||''}" style="text-align:left;width:100%;font-size:11.5px"></td>
     <td><input type="number" step="any" data-path="products.${i}.first" value="${p.first}"></td>
     <td><input type="number" step="any" data-path="products.${i}.monthly" value="${p.monthly}"></td>
+    <td><input type="number" step="1" data-path="products.${i}.cycle" value="${p.cycle||1}"></td>
     <td><input type="number" step="any" data-path="products.${i}.mixPct" value="${(p.mix*100).toFixed(1)}"></td>
     <td><input type="number" step="any" data-path="products.${i}.churnPct" value="${(p.churn*100).toFixed(1)}"></td></tr>`).join('');
   document.getElementById('assumptions').innerHTML=`
@@ -419,7 +437,8 @@ function buildAssumptions(){
   </div></details>
   <details class="grp" open><summary>Acquisition &amp; produits <span class="chev">▶</span></summary><div class="body">
     ${fld('CAC ($/client)','cac',a.cac,{step:1,suffix:'$'})}
-    <table class="ptable"><thead><tr><th>Produit</th><th>1ᵉʳ $</th><th>Mensuel $</th><th>Mix %</th><th>Churn %</th></tr></thead><tbody>${prows}</tbody></table>
+    <table class="ptable"><thead><tr><th>Produit</th><th>1ᵉʳ $</th><th>Récurrent $</th><th>Cycle mois</th><th>Mix %</th><th>Churn %</th></tr></thead><tbody>${prows}</tbody></table>
+    <p class="note" style="margin:6px 0 0;font-size:11px">« Récurrent $ » = montant <b>encaissé à chaque cycle</b> (ex. Quarterly 79,99 € tous les 3 mois). L'intro couvre le 1er cycle. Le MRR reste lissé, mais la <b>trésorerie encaisse par cycle</b>.</p>
     <p class="note" id="mixnote"></p>
     <div class="econ" id="econBox"></div>
     <p class="note">Budget Meta par mois → onglet <b>Acquisition mensuelle</b>. Le ROAS et le payback se déduisent des prix produits.</p>
@@ -649,18 +668,18 @@ function renderTreasury(){
         segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
       {label:'Sans prêt BPI',data:R.cash_nobpi,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
       options:{...opts(fShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}});}
-  let h='<thead><tr><th>Mois</th><th>CA net</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
-  for(let i=0;i<N;i++)h+=`<tr><td>${R.months[i]}</td><td>${fUSD(R.net_rev[i])}</td><td class="${R.ebitda[i]<0?'neg':''}">${fUSD(R.ebitda[i])}</td><td class="neg">${fUSD(R.capex[i])}</td><td class="${R.bpi_cf[i]<0?'neg':''}" style="${R.bpi_cf[i]>0?'color:#0F6E56;font-weight:500':''}">${R.bpi_cf[i]?fUSD(R.bpi_cf[i]):'—'}</td><td class="${R.net_cf[i]<0?'neg':''}">${fUSD(R.net_cf[i])}</td><td class="${R.cash_end[i]<0?'neg':''}"><b>${fUSD(R.cash_end[i])}</b></td></tr>`;
+  let h='<thead><tr><th>Mois</th><th>CA encaissé</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
+  for(let i=0;i<N;i++)h+=`<tr><td>${R.months[i]}</td><td>${fUSD(R.cash_rev[i])}</td><td class="${R.ebitda[i]<0?'neg':''}">${fUSD(R.ebitda[i])}</td><td class="neg">${fUSD(R.capex[i])}</td><td class="${R.bpi_cf[i]<0?'neg':''}" style="${R.bpi_cf[i]>0?'color:#0F6E56;font-weight:500':''}">${R.bpi_cf[i]?fUSD(R.bpi_cf[i]):'—'}</td><td class="${R.net_cf[i]<0?'neg':''}">${fUSD(R.net_cf[i])}</td><td class="${R.cash_end[i]<0?'neg':''}"><b>${fUSD(R.cash_end[i])}</b></td></tr>`;
   document.getElementById('cashTable').innerHTML=h+'</tbody>';
   /* décomposition détaillée des flux de banque (virement Meta à 30 j explicite) */
-  let dh='<thead><tr><th>Mois</th><th>Cash début</th><th>+ CA net</th><th>− COGS</th><th>− Salaires</th><th>− Logiciels</th><th>− G&A</th><th>− Compta</th><th>− Sales tax</th><th>− Capex</th><th>− Remb. BPI</th><th>Cash avant Meta</th><th>− Meta payé (M-1)</th><th>= Cash fin</th></tr></thead><tbody>';
+  let dh='<thead><tr><th>Mois</th><th>Cash début</th><th>+ CA encaissé</th><th>− COGS</th><th>− Salaires</th><th>− Logiciels</th><th>− G&A</th><th>− Compta</th><th>− Sales tax</th><th>− Capex</th><th>− Remb. BPI</th><th>Cash avant Meta</th><th>− Meta payé (M-1)</th><th>= Cash fin</th></tr></thead><tbody>';
   const cell=v=>`<td class="${v<0?'neg':''}">${v?fUSD(v):'—'}</td>`;
   for(let i=0;i<N;i++){
     const metaCash=R.meta[i]+R.timing[i];          // = −(dépense Meta de M-1) ; 0 au 1er mois
     const cashAvantMeta=R.cash_end[i]-metaCash;     // solde juste avant le virement Meta
     dh+=`<tr><td>${R.months[i]}</td>`
       +`<td><b>${fUSD(R.cash_beg[i])}</b></td>`
-      +`<td style="color:#0F6E56">${fUSD(R.net_rev[i])}</td>`
+      +`<td style="color:#0F6E56">${fUSD(R.cash_rev[i])}</td>`
       +cell(R.total_cogs[i])+cell(R.salaries[i])+cell(R.software[i])+cell(R.ga[i])+cell(R.accounting[i])+cell(R.salestax[i])+cell(R.capex[i])+cell(R.bpi_cf[i])
       +`<td class="${cashAvantMeta<0?'neg':''}">${fUSD(cashAvantMeta)}</td>`
       +cell(metaCash)
@@ -687,16 +706,16 @@ function tresChartCfg(Rx){return {type:'line',data:{labels:Rx.months,datasets:[
     {label:'Sans prêt BPI',data:Rx.cash_nobpi,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
     options:{...opts(fShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}};}
 function tresDetailHTML(Rx){
-  let h='<thead><tr><th>Mois</th><th>CA net</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
-  for(let i=0;i<Rx.months.length;i++)h+=`<tr><td>${Rx.months[i]}</td><td>${fUSD(Rx.net_rev[i])}</td><td class="${Rx.ebitda[i]<0?'neg':''}">${fUSD(Rx.ebitda[i])}</td><td class="neg">${fUSD(Rx.capex[i])}</td><td class="${Rx.bpi_cf[i]<0?'neg':''}">${Rx.bpi_cf[i]?fUSD(Rx.bpi_cf[i]):'—'}</td><td class="${Rx.net_cf[i]<0?'neg':''}">${fUSD(Rx.net_cf[i])}</td><td class="${Rx.cash_end[i]<0?'neg':''}"><b>${fUSD(Rx.cash_end[i])}</b></td></tr>`;
+  let h='<thead><tr><th>Mois</th><th>CA encaissé</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
+  for(let i=0;i<Rx.months.length;i++)h+=`<tr><td>${Rx.months[i]}</td><td>${fUSD(Rx.cash_rev[i])}</td><td class="${Rx.ebitda[i]<0?'neg':''}">${fUSD(Rx.ebitda[i])}</td><td class="neg">${fUSD(Rx.capex[i])}</td><td class="${Rx.bpi_cf[i]<0?'neg':''}">${Rx.bpi_cf[i]?fUSD(Rx.bpi_cf[i]):'—'}</td><td class="${Rx.net_cf[i]<0?'neg':''}">${fUSD(Rx.net_cf[i])}</td><td class="${Rx.cash_end[i]<0?'neg':''}"><b>${fUSD(Rx.cash_end[i])}</b></td></tr>`;
   return h+'</tbody>';
 }
 function tresDecompHTML(Rx){
-  let dh='<thead><tr><th>Mois</th><th>Cash début</th><th>+ CA net</th><th>− COGS</th><th>− Salaires</th><th>− Logiciels</th><th>− G&A</th><th>− Compta</th><th>− Sales tax</th><th>− Capex</th><th>− Remb. BPI</th><th>Cash avant Meta</th><th>− Meta payé (M-1)</th><th>= Cash fin</th></tr></thead><tbody>';
+  let dh='<thead><tr><th>Mois</th><th>Cash début</th><th>+ CA encaissé</th><th>− COGS</th><th>− Salaires</th><th>− Logiciels</th><th>− G&A</th><th>− Compta</th><th>− Sales tax</th><th>− Capex</th><th>− Remb. BPI</th><th>Cash avant Meta</th><th>− Meta payé (M-1)</th><th>= Cash fin</th></tr></thead><tbody>';
   const cell=v=>`<td class="${v<0?'neg':''}">${v?fUSD(v):'—'}</td>`;
   for(let i=0;i<Rx.months.length;i++){
     const metaCash=Rx.meta[i]+Rx.timing[i], avant=Rx.cash_end[i]-metaCash;
-    dh+=`<tr><td>${Rx.months[i]}</td><td><b>${fUSD(Rx.cash_beg[i])}</b></td><td style="color:#0F6E56">${fUSD(Rx.net_rev[i])}</td>`
+    dh+=`<tr><td>${Rx.months[i]}</td><td><b>${fUSD(Rx.cash_beg[i])}</b></td><td style="color:#0F6E56">${fUSD(Rx.cash_rev[i])}</td>`
       +cell(Rx.total_cogs[i])+cell(Rx.salaries[i])+cell(Rx.software[i])+cell(Rx.ga[i])+cell(Rx.accounting[i])+cell(Rx.salestax[i])+cell(Rx.capex[i])+cell(Rx.bpi_cf[i])
       +`<td class="${avant<0?'neg':''}">${fUSD(avant)}</td>`+cell(metaCash)+`<td class="${Rx.cash_end[i]<0?'neg':''}"><b>${fUSD(Rx.cash_end[i])}</b></td></tr>`;
   }
