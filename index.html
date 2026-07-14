@@ -273,22 +273,23 @@ function runModel(A,opts){
    firstCash = prix payé à la souscription (plein, base du ROAS J0).
    recurMo = équivalent mensuel du récurrent (weekly→mensuel). LTV = 1er paiement + flux récurrent actualisé du churn. */
 function unitEcon(A){
-  const P=A.products, up=[0,A.upMtoY,A.upQtoY,0]; const mE=k=>P[k].monthly/(P[k].cycle||1); const cY=P[3].churn, mY=mE(3);
+  const P=A.products; const mE=k=>P[k].monthly/(P[k].cycle||1);   // équivalent mensuel (ARPU affiché)
+  const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));
   let firstCash=0,arpu=0,ltv=0; const per=[];
-  /* LTV par client : simulation mensuelle qui suit le passage en annuel (l'upgradé paie le prix Yearly et churne au churn Yearly) */
+  /* LTV RÉELLE (facturation par cycle) : le récurrent est encaissé tous les `cycle` mois, pondéré par la survie — plus de lissage */
   for(let k=0;k<4;k++){
-    const cK=P[k].churn,u=up[k];
-    let lp=P[k].first, pK=1, pY=0;
-    for(let t=1;t<=400;t++){ const upg=pK*(1-cK)*u; pK=pK*(1-cK)*(1-u); pY=pY*(1-cY)+upg; lp+=pK*mE(k)+pY*mY; }
+    const cK=P[k].churn, L=CYC[k], pr=P[k].monthly;
+    let lp=P[k].first, s=1;
+    for(let t=1;t<=600;t++){ s*=(1-cK); if(t%L===0) lp+=s*pr; }
     firstCash+=P[k].mix*P[k].first; arpu+=P[k].mix*mE(k); ltv+=P[k].mix*lp;
     per.push({name:P[k].name,first:P[k].first,monthly:mE(k),ltv:lp});
   }
-  /* Payback : mois où le cumul de revenu par client acquis (churn + passage annuel inclus) atteint le CAC */
+  /* Payback RÉEL : mois où le cumul ENCAISSÉ par client acquis (facturation par cycle, churn inclus) atteint le CAC */
   let cum=firstCash, payback=Infinity;
   if(cum>=A.cac) payback=0;
-  else { const st=P.map(()=>({pK:1,pY:0}));
-    for(let t=1;t<=400;t++){ let add=0;
-      for(let k=0;k<4;k++){ const cK=P[k].churn,u=up[k]; const upg=st[k].pK*(1-cK)*u; st[k].pK=st[k].pK*(1-cK)*(1-u); st[k].pY=st[k].pY*(1-cY)+upg; add+=P[k].mix*(st[k].pK*mE(k)+st[k].pY*mY); }
+  else { const s=P.map(()=>1);
+    for(let t=1;t<=600;t++){ let add=0;
+      for(let k=0;k<4;k++){ s[k]*=(1-P[k].churn); if(t%CYC[k]===0) add+=P[k].mix*s[k]*P[k].monthly; }
       cum+=add; if(cum>=A.cac){payback=t;break;} } }
   const roas=A.cac>0?firstCash/A.cac:0, ltvcac=A.cac>0?ltv/A.cac:0;
   return {firstCash,arpu,roas,payback,ltv,ltvcac,per};
@@ -323,7 +324,8 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="La9TfjD2nRGnfK5ljV0Y1g==.6X9cPaLBBOpExTM8.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";
+const HOSTED_DATA="La9TfjD2nRGnfK5ljV0Y1g==.6X9cPaLBBOpExTM8.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
+'+blob+'";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
