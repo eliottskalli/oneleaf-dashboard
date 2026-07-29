@@ -107,6 +107,7 @@
     <button data-tab="acq">Acquisition mensuelle</button>
     <button data-tab="cash">Trésorerie</button>
     <button data-tab="cashreal">Trésorerie réelle</button>
+    <button data-tab="rbf">RBF Oneleaf</button>
   </div>
 </header>
 
@@ -178,6 +179,28 @@
         <div class="scroll"><table class="dt" id="cashTableR"></table></div></div>
       <div class="panel"><h2>Décomposition du cash (CAC réel) — sorties de banque mois par mois</h2>
         <div class="scroll"><table class="dt" id="cashDecompR"></table></div></div>
+    </section>
+
+    <section class="tabpane" id="pane-rbf">
+      <div class="bulk" style="flex-wrap:wrap">
+        <div class="b"><label>Spend cible (€/mois)</label><input id="rbf_target" type="number" step="10000" value="1000000"></div>
+        <div class="b"><label>Mois pour atteindre la cible</label><input id="rbf_ramp" type="number" step="1"></div>
+        <div class="b"><label>% du spend financé</label><input id="rbf_ratio" type="number" step="5" value="100"></div>
+        <div class="b"><label>Coût RBF (%/mois)</label><input id="rbf_rate" type="number" step="0.1" value="1"></div>
+        <div class="b"><label>Durée remboursement (mois)</label><input id="rbf_term" type="number" step="1" value="6"></div>
+        <div class="b"><label>CAC au spend cible (€)</label><input id="rbf_cactgt" type="number" step="1" placeholder="constant"></div>
+      </div>
+      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b> : chaque mois de dépense est avancé par le financeur, puis remboursé sur la durée choisie au coût indiqué (1 %/mois × durée ≈ le coût total par avance). Le plan monte <b>graduellement jusqu'au spend cible</b>. On compare la trésorerie <b>avec</b> et <b>sans</b> RBF sous le même plan de croissance, et on chiffre le coût total pour la boîte.</p>
+      <div class="kpis" id="rbfKpis"></div>
+      <div class="panel"><h2>Trésorerie — avec vs sans RBF</h2><p class="csub">Même plan de croissance (montée vers le spend cible). Le RBF lisse la sortie Meta et remonte le point bas ; en régime établi il ne réduit plus le besoin, il le décale et ajoute son coût.</p>
+        <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec RBF</span><span><span class="dash" style="border-top-color:#888780"></span>Sans RBF</span></div>
+        <div class="chartwrap lg"><canvas id="rbfCashChart"></canvas></div></div>
+      <div class="panel"><h2>Spend Meta &amp; coût du RBF</h2><p class="csub">Montée du spend vers la cible et coût de financement mensuel (axe de droite)</p>
+        <div class="legend"><span><span class="sw" style="background:#378ADD"></span>Spend Meta</span><span><span class="dash" style="border-top-color:#BA7517"></span>Coût RBF mensuel</span></div>
+        <div class="chartwrap"><canvas id="rbfSpendChart"></canvas></div></div>
+      <div class="panel"><h2>Plan annuel 5 ans — coût de croissance RBF intégré</h2>
+        <div style="overflow-x:auto"><table class="dt" id="rbfTable"></table></div>
+        <div class="foot" id="rbffoot"></div></div>
     </section>
 
   </main>
@@ -752,7 +775,7 @@ document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCas
 function recompute(){
   R=runModel(A);
   document.getElementById('acqfoot').textContent='Total clients acquis sur l\'horizon : '+fInt(R.clients.reduce((a,b)=>a+b,0))+' · MRR base de départ : '+fUSD(A.startMRR)+'.';
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();}
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();}
   saveState('auto');
 }
 
@@ -785,13 +808,118 @@ document.querySelectorAll('.pnltoggle button').forEach(b=>b.onclick=()=>{pnlMode
 document.getElementById('tabbar').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+tab));
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}};
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();}};
 document.getElementById('csvbtn').onclick=()=>{
   const keys=['months','meta_spend','clients','active_subs','mrr_legacy','mrr_new','mrr_total','upsell_rev','net_rev','total_cogs','gross_profit','meta','total_opex','ebitda','net_cf','cash_end'];
   let csv=keys.join(',')+'\n';
   for(let i=0;i<R.months.length;i++)csv+=keys.map(k=>k==='months'?R[k][i]:Math.round(R[k][i])).join(',')+'\n';
   const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='oneleaf_monthly.csv';a.click();URL.revokeObjectURL(u);};
 document.getElementById('importFile').onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value='';};
+
+/* ============ RBF Oneleaf : financement de la croissance Meta ============ */
+/* On finance la depense Meta par du RBF. Chaque avance = spend finance du mois,
+   rembourse sur `term` mois au cout `rate`/mois (total ~ rate x term par avance).
+   Effet : la grosse sortie Meta (payee a 30 j) est lissee sur `term` mois + un cout de financement. */
+const RBF={ target:1000000, rampMonths:null, ratio:1, rate:0.01, term:6, cacTarget:0 };
+const fEur=v=>(v<0?'-':'')+'€'+Math.abs(Math.round(v)).toLocaleString('fr-FR');
+const fEurShort=v=>{const a=Math.abs(v);let s=a>=1e6?(a/1e6).toFixed(2)+' M€':a>=1e3?Math.round(a/1e3)+' k€':Math.round(a)+' €';return (v<0?'-':'')+s;};
+function rbfMeta(){
+  const N=A.horizon, start=A.meta[0]||270000, target=RBF.target, ramp=Math.max(2,Math.min(RBF.rampMonths||N,N));
+  const m=[];
+  for(let i=0;i<N;i++) m.push(i>=ramp-1?target:start+(target-start)*(i/(ramp-1)));
+  return m;
+}
+function runRBF(){
+  const Ar=structuredClone(A); Ar.meta=rbfMeta();
+  const start=A.meta[0]||1, tgt=RBF.target, ct=RBF.cacTarget;
+  const cacArr=Ar.meta.map(sp=>{
+    if(!ct||ct===A.cac) return A.cac;
+    const frac=tgt>start?Math.min(1,Math.max(0,(sp-start)/(tgt-start))):0;
+    return A.cac+(ct-A.cac)*frac;
+  });
+  const R0=runModel(Ar,{cacArr});
+  const N=Ar.horizon, ratio=RBF.ratio, rate=RBF.rate, term=Math.max(1,Math.round(RBF.term));
+  const F=Ar.meta.map(sp=>sp*ratio);                 // avance = portion financee du spend
+  const ff=1+rate*term, avoided=new Array(N).fill(0), repay=new Array(N).fill(0);
+  for(let m=0;m<N;m++){
+    if(m+1<N) avoided[m+1]+=F[m];                    // Meta du mois m paye a m+1 : le RBF le couvre
+    const inst=F[m]*ff/term;                         // mensualite = (principal + frais) / duree
+    for(let j=1;j<=term;j++){ if(m+j<N) repay[m+j]+=inst; }
+  }
+  const rbfCf=[],cashRbf=[],rbfCostMo=[]; let cum=0, outstanding=0;
+  for(let m=0;m<N;m++){
+    const cf=avoided[m]-repay[m]; cum+=cf;
+    rbfCf.push(cf); cashRbf.push(R0.cash_end[m]+cum);
+    rbfCostMo.push(F[m]*rate*term);                  // frais total de l'avance du mois m (reconnu a la souscription)
+  }
+  const totalCost=F.reduce((a,x)=>a+x*rate*term,0), totalSpend=Ar.meta.reduce((a,x)=>a+x,0);
+  return {R0,meta:Ar.meta,F,rbfCf,cashRbf,rbfCostMo,totalCost,totalSpend,cacArr};
+}
+let rbfCashObj,rbfSpendObj;
+function renderRBF(){
+  const X=runRBF(), R0=X.R0, N=R0.months.length;
+  const lowNo=Math.min(...R0.cash_end), lowNoIdx=R0.cash_end.indexOf(lowNo);
+  const lowY=Math.min(...X.cashRbf), lowYIdx=X.cashRbf.indexOf(lowY);
+  const cards=[
+    {k:'Spend cible',v:fEurShort(RBF.target)+'/mois',d:'atteint en '+(RBF.rampMonths||A.horizon)+' mois'},
+    {k:'Point bas SANS RBF',v:fEurShort(lowNo),d:R0.months[lowNoIdx],cls:lowNo<0?'neg':'pos'},
+    {k:'Point bas AVEC RBF',v:fEurShort(lowY),d:R0.months[lowYIdx],cls:lowY<0?'neg':'pos'},
+    {k:'Cout total RBF (5 ans)',v:fEurShort(X.totalCost),d:(100*X.totalCost/X.totalSpend).toFixed(1)+'% du spend',cls:'neg'},
+    {k:'Cash final avec RBF',v:fEurShort(X.cashRbf[N-1]),d:R0.months[N-1],cls:X.cashRbf[N-1]<0?'neg':'pos'},
+  ];
+  document.getElementById('rbfKpis').innerHTML=cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+  if(typeof Chart!=='undefined'){
+    rbfCashObj&&rbfCashObj.destroy();
+    rbfCashObj=new Chart(document.getElementById('rbfCashChart'),{type:'line',data:{labels:R0.months,datasets:[
+      {label:'Tresorerie AVEC RBF',data:X.cashRbf,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
+      {label:'Tresorerie SANS RBF',data:R0.cash_end,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
+      options:{...opts(fEurShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fEur(c.parsed.y)}}}}});
+    rbfSpendObj&&rbfSpendObj.destroy();
+    const so=opts(fEurShort); so.scales.cost={position:'right',beginAtZero:true,grid:{display:false},ticks:{font:{size:11},color:'#BA7517',callback:fEurShort}};
+    rbfSpendObj=new Chart(document.getElementById('rbfSpendChart'),{data:{labels:R0.months,datasets:[
+      {type:'bar',label:'Spend Meta',data:X.meta,backgroundColor:'#378ADD',yAxisID:'y'},
+      {type:'line',label:'Cout RBF mensuel',data:X.rbfCostMo,borderColor:'#BA7517',borderWidth:2,pointRadius:0,tension:0.3,yAxisID:'cost'}]},
+      options:{...so,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fEur(c.parsed.y)}}}}});
+  }
+  const yrs=[...new Set(R0.months.map(m=>m.slice(0,4)))];
+  const idxByYear=y=>R0.months.map((m,i)=>m.startsWith(y)?i:-1).filter(i=>i>=0);
+  const sum=(arr,ix)=>ix.reduce((a,i)=>a+arr[i],0);
+  const allIx=R0.months.map((_,i)=>i);
+  const ROWS=[
+    ['Spend Meta',ix=>-sum(X.meta,ix),'neg'],
+    ['Clients acquis',ix=>sum(R0.clients,ix),'int'],
+    ['CA net',ix=>sum(R0.net_rev,ix),''],
+    ['EBITDA',ix=>sum(R0.ebitda,ix),''],
+    ['− Cout RBF',ix=>-sum(X.rbfCostMo,ix),'neg'],
+    ['Resultat apres RBF',ix=>sum(R0.ebitda,ix)-sum(X.rbfCostMo,ix),'major'],
+    ['Cash fin (avec RBF)',ix=>X.cashRbf[ix[ix.length-1]],'cash major'],
+  ];
+  let html='<thead><tr><th>€</th>'+yrs.map(y=>`<th>${y}</th>`).join('')+'<th>Total 5 ans</th></tr></thead><tbody>';
+  for(const [label,fn,kind] of ROWS){
+    const isInt=kind.includes('int'), isCash=kind.includes('cash');
+    html+=`<tr class="${kind.includes('major')?'major':''}"><td>${label}</td>`;
+    for(const y of yrs){ const v=fn(idxByYear(y)); html+=`<td class="${v<0?'neg':''}">${isInt?fInt(v):fEur(v)}</td>`; }
+    const tot=isCash?fn(allIx):yrs.reduce((a,y)=>a+fn(idxByYear(y)),0);
+    html+=`<td class="${tot<0?'neg':''}"><b>${isInt?fInt(tot):fEur(tot)}</b></td></tr>`;
+  }
+  document.getElementById('rbfTable').innerHTML=html+'</tbody>';
+  document.getElementById('rbffoot').innerHTML='Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. Les remboursements des dernieres avances se poursuivent au-dela de l\'horizon (le cash final ne porte pas encore ce reliquat).';
+}
+function syncRbfInputs(){
+  const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
+  g('rbf_target').value=RBF.target;
+  g('rbf_ramp').value=RBF.rampMonths||A.horizon;
+  g('rbf_ratio').value=Math.round(RBF.ratio*100);
+  g('rbf_rate').value=+(RBF.rate*100).toFixed(2);
+  g('rbf_term').value=RBF.term;
+  g('rbf_cactgt').value=RBF.cacTarget||'';
+}
+(function wireRbfInputs(){
+  const map={rbf_target:v=>RBF.target=Math.max(0,v),rbf_ramp:v=>RBF.rampMonths=Math.max(2,Math.round(v)),
+    rbf_ratio:v=>RBF.ratio=Math.max(0,v)/100,rbf_rate:v=>RBF.rate=Math.max(0,v)/100,
+    rbf_term:v=>RBF.term=Math.max(1,Math.round(v)),rbf_cactgt:v=>RBF.cacTarget=Math.max(0,v)};
+  Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderRBF();});});
+})();
 
 /* boot */
 try{const _s=new URLSearchParams(location.search).get('s'); if(_s==='A'||_s==='B')scenario=_s;}catch(e){}
