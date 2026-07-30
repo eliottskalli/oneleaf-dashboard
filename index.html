@@ -219,7 +219,8 @@ function runModel(A,opts){
   const upM=A.upMtoY, upQ=A.upQtoY;
   /* rétention : les mensuels/trimestriels retenus qui migrent vers l'annuel quittent leur pool */
   const ret=[1-P[0].churn,(1-P[1].churn)*(1-upM),(1-P[2].churn)*(1-upQ),1-P[3].churn];
-  const mEq=k=>P[k].monthly/(P[k].cycle||1);         // équivalent MENSUEL (accrual/MRR) = prix par cycle ÷ cycle
+  const eMul=k=>1+(P[k].eliteShare||0)*(P[k].elitePremium||0);   // surprix Elite : part des abonnés x prime, appliqué au prix récurrent
+  const mEq=k=>P[k].monthly*eMul(k)/(P[k].cycle||1);         // équivalent MENSUEL (accrual/MRR) = prix par cycle (surprix Elite inclus) ÷ cycle
   const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));   // cycle de facturation en mois
   const ph=P.map((p,k)=>new Array(CYC[k]).fill(0));  // buckets d'encaissement : ph[k][j] = clients qui facturent dans j mois
   const act=[[],[],[],[]],rev=[[],[],[],[]];
@@ -240,7 +241,7 @@ function runModel(A,opts){
       const L=CYC[k];
       for(let j=0;j<L;j++) ph[k][j]*=ret[k];                       // churn mensuel sur les buckets
       const billers=ph[k][0];                                       // ceux dont l'échéance tombe ce mois
-      cohortCash += newc*P[k].first + billers*P[k].monthly;         // intro (nouveaux) + renouvellements (prix par cycle)
+      cohortCash += newc*P[k].first + billers*P[k].monthly*eMul(k);         // intro (nouveaux) + renouvellements (prix par cycle, surprix Elite inclus)
       for(let j=0;j<L-1;j++) ph[k][j]=ph[k][j+1];                    // le temps avance d'un mois
       ph[k][L-1]=billers+newc;                                       // renouvelés + nouveaux : prochaine échéance dans `cycle` mois
     }
@@ -296,12 +297,13 @@ function runModel(A,opts){
    firstCash = prix payé à la souscription (plein, base du ROAS J0).
    recurMo = équivalent mensuel du récurrent (weekly→mensuel). LTV = 1er paiement + flux récurrent actualisé du churn. */
 function unitEcon(A){
-  const P=A.products; const mE=k=>P[k].monthly/(P[k].cycle||1);   // équivalent mensuel (ARPU affiché)
+  const P=A.products; const eMul=k=>1+(P[k].eliteShare||0)*(P[k].elitePremium||0);   // surprix Elite
+  const mE=k=>P[k].monthly*eMul(k)/(P[k].cycle||1);   // équivalent mensuel (ARPU affiché, surprix Elite inclus)
   const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));
   let firstCash=0,arpu=0,ltv=0; const per=[];
   /* LTV RÉELLE (facturation par cycle) : le récurrent est encaissé tous les `cycle` mois, pondéré par la survie — plus de lissage */
   for(let k=0;k<4;k++){
-    const cK=P[k].churn, L=CYC[k], pr=P[k].monthly;
+    const cK=P[k].churn, L=CYC[k], pr=P[k].monthly*eMul(k);
     let lp=P[k].first, s=1;
     for(let t=1;t<=600;t++){ s*=(1-cK); if(t%L===0) lp+=s*pr; }
     firstCash+=P[k].mix*P[k].first; arpu+=P[k].mix*mE(k); ltv+=P[k].mix*lp;
@@ -312,7 +314,7 @@ function unitEcon(A){
   if(cum>=A.cac) payback=0;
   else { const s=P.map(()=>1);
     for(let t=1;t<=600;t++){ let add=0;
-      for(let k=0;k<4;k++){ s[k]*=(1-P[k].churn); if(t%CYC[k]===0) add+=P[k].mix*s[k]*P[k].monthly; }
+      for(let k=0;k<4;k++){ s[k]*=(1-P[k].churn); if(t%CYC[k]===0) add+=P[k].mix*s[k]*P[k].monthly*eMul(k); }
       cum+=add; if(cum>=A.cac){payback=t;break;} } }
   const roas=A.cac>0?firstCash/A.cac:0, ltvcac=A.cac>0?ltv/A.cac:0;
   return {firstCash,arpu,roas,payback,ltv,ltvcac,per};
@@ -328,8 +330,8 @@ const DEFAULTS={
   products:[
     {name:'Weekly',   first:5.19,  monthly:43,    cycle:1,  mix:0.08, churn:0.125},
     {name:'Monthly',  first:9.99,  monthly:43,    cycle:1,  mix:0.14, churn:0.125},
-    {name:'Quarterly',first:19.99, monthly:79.99, cycle:3,  mix:0.71, churn:0.125},
-    {name:'Yearly',   first:119.99,monthly:119.99,cycle:12, mix:0.07, churn:0.125}],
+    {name:'Quarterly',first:19.99, monthly:79.99, cycle:3,  mix:0.71, churn:0.125, eliteShare:0, elitePremium:0.10},
+    {name:'Yearly',   first:119.99,monthly:119.99,cycle:12, mix:0.07, churn:0.125, eliteShare:0, elitePremium:0.10}],
   upMtoY:0.02, upQtoY:0.01, upChurn:0.06,                 // passage en annuel post-achat
   upsells:[
     {name:'Ebook',          base:'Nouveaux', attach:0.12, price:9.99,  recur:false, churn:0},
@@ -366,7 +368,7 @@ async function decryptModel(blob,pw){const[s,i,c]=blob.split('.');
 function saveState(kind){if(HOSTED)return;try{localStorage.setItem(skey(),JSON.stringify(A));lastSaved=new Date();updateSaveStatus(kind);}catch(e){const el=document.getElementById('saveStatus');if(el)el.textContent='⚠ Sauvegarde impossible';}}
 /* migration : produits sans `cycle` = ancien format où `monthly` était l'équivalent MENSUEL.
    On ajoute le cycle (Weekly/Monthly=1, Quarterly=3, Yearly=12) et on convertit monthly en PRIX PAR CYCLE (encaissé). */
-function migrateProducts(){const def=[1,1,3,12];(A.products||[]).forEach((p,i)=>{if(p.cycle===undefined){p.cycle=def[i]||1;p.monthly=(p.monthly||0)*p.cycle;}});}
+function migrateProducts(){const def=[1,1,3,12];(A.products||[]).forEach((p,i)=>{if(p.cycle===undefined){p.cycle=def[i]||1;p.monthly=(p.monthly||0)*p.cycle;} if(p.eliteShare===undefined)p.eliteShare=0; if(p.elitePremium===undefined)p.elitePremium=0.10;});}
 function loadState(){try{const raw=localStorage.getItem(skey());if(!raw)return false;const o=JSON.parse(raw);A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();
   A.upsells=A.upsells||[];
   A.upsells.forEach(u=>{if(u.recur===undefined)u.recur=false; if(u.churn===undefined)u.churn=0;});
@@ -467,6 +469,15 @@ function buildAssumptions(){
     <div class="econ" id="econBox"></div>
     <p class="note">Budget Meta par mois → onglet <b>Acquisition mensuelle</b>. Le ROAS et le payback se déduisent des prix produits.</p>
   </div></details>
+  <details class="grp" open><summary>Abonnement Elite (surprix) <span class="chev">▶</span></summary><div class="body">
+    <table class="ptable"><thead><tr><th>Produit</th><th>% en Elite</th><th>Prime %</th></tr></thead><tbody>
+    ${a.products.map((p,i)=>`<tr><td style="text-align:left;font-size:11.5px">${p.name||''}</td>
+      <td><input type="number" step="any" data-path="products.${i}.eliteSharePct" value="${((p.eliteShare||0)*100).toFixed(1)}"></td>
+      <td><input type="number" step="any" data-path="products.${i}.elitePremiumPct" value="${((p.elitePremium??0.10)*100).toFixed(1)}"></td></tr>`).join('')}
+    </tbody></table>
+    <p class="note" id="elitenote"></p>
+    <p class="note" style="font-size:11px">Part des abonnés d'un produit qui prennent la version <b>Elite</b>, facturée <b>Prime %</b> plus cher sur le <b>récurrent</b> (l'intro reste identique). Ex. 30 % des Quarterly en Elite à +10 % → prix récurrent moyen = 79,99 × (1 + 30 % × 10 %) = <b>82,39 €</b>. MRR, LTV, payback et trésorerie l'intègrent automatiquement.</p>
+  </div></details>
   <details class="grp"><summary>Passage en annuel (post-achat) <span class="chev">▶</span></summary><div class="body">
     ${fld((a.products[1].name||'Produit 2')+' → annuel / mois','upMtoYPct',pct(a.upMtoY).toFixed(2),{suffix:'%'})}
     ${fld((a.products[2].name||'Produit 3')+' → annuel / mois','upQtoYPct',pct(a.upQtoY).toFixed(2),{suffix:'%'})}
@@ -527,6 +538,9 @@ function updateEcon(){
     +`<br><span style="font-size:10.5px;opacity:.85">${perTxt}</span>`;
   const mn=document.getElementById('mixnote');
   if(mn){const s=A.products.reduce((x,p)=>x+p.mix,0),off=Math.abs(s-1)>0.0001;mn.innerHTML='Mix = <b style="color:'+(off?'#D85A30':'#0F6E56')+'">'+(s*100).toFixed(1)+'%</b> (doit faire 100 %).';}
+  const en=document.getElementById('elitenote');
+  if(en){const el=A.products.map((p,i)=>({p,i})).filter(o=>(o.p.eliteShare||0)>0);
+    en.innerHTML = el.length ? el.map(o=>{const mul=1+(o.p.eliteShare||0)*(o.p.elitePremium||0);return `Prix récurrent <b>${o.p.name}</b> moyen avec Elite = <b>$${(o.p.monthly*mul).toFixed(2)}</b>/cycle (vs $${(+o.p.monthly).toFixed(2)} sans, +${((mul-1)*100).toFixed(1)}%)`;}).join('<br>') : '<span style="opacity:.7">Aucune part Elite saisie pour l\'instant.</span>';}
 }
 function applyPath(path,v){
   const pctMap={churnLegPct:'churnLeg',upMtoYPct:'upMtoY',upQtoYPct:'upQtoY',upChurnPct:'upChurn',payfeePct:'payfee',bpiRatePct:'bpiRate',supportGPct:'supportG',contentGPct:'contentG',salGPct:'salG',softGPct:'softG',gaGPct:'gaG'};
@@ -536,6 +550,8 @@ function applyPath(path,v){
     const n=parseFloat(v);
     if(key==='mixPct')A.products[x].mix=isNaN(n)?0:n/100;
     else if(key==='churnPct')A.products[x].churn=isNaN(n)?0:n/100;
+    else if(key==='eliteSharePct')A.products[x].eliteShare=isNaN(n)?0:n/100;
+    else if(key==='elitePremiumPct')A.products[x].elitePremium=isNaN(n)?0:n/100;
     else A.products[x][key]=isNaN(n)?0:n;return;}
   if(path.startsWith('upsells.')){const[,i,key]=path.split('.');const x=+i;
     if(key==='attachPct'){const n=parseFloat(v);A.upsells[x].attach=isNaN(n)?0:n/100;}
