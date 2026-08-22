@@ -224,6 +224,7 @@ function runModel(A,opts){
   const mEq=k=>ePrice(k)/(P[k].cycle||1);         // équivalent MENSUEL (accrual/MRR) = prix récurrent moyen (Elite inclus) ÷ cycle
   const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));   // cycle de facturation en mois
   const ph=P.map((p,k)=>new Array(CYC[k]).fill(0));  // buckets d'encaissement : ph[k][j] = clients qui facturent dans j mois
+  const phU=new Array(12).fill(0);   // buckets d'encaissement de l'upgrade annuel (cycle 12 mois, encaissé day-1)
   const act=[[],[],[],[]],rev=[[],[],[],[]];
   const legArr=[],newArr=[],totArr=[],subs=[],clients=[],upgArr=[],upsArr=[],netArr=[],cashArr=[];
   const upPool=A.upsells.map(()=>0);   // pool d'abonnés par upsell récurrent
@@ -249,7 +250,13 @@ function runModel(A,opts){
     /* pool upgrade-to-yearly : migrants des mensuels+trimestriels, paie le prix mensuel annuel, churn propre */
     const mig=g(act[1],m-1)*(1-P[1].churn)*upM+g(act[2],m-1)*(1-P[2].churn)*upQ;
     upgArr[m]=g(upgArr,m-1)*(1-P[3].churn)+mig;   // les migrés churnent au churn du produit Yearly
-    const upgRev=upgArr[m]*mEq(3);
+    const upgRev=upgArr[m]*mEq(3);                 // ACCRUAL (MRR) : équivalent mensuel annuel lissé
+    /* CASH de l'upgrade : encaissé DAY-1 au prix annuel plein (nouveaux migrants), puis renouvelé tous les 12 mois */
+    for(let j=0;j<12;j++) phU[j]*=(1-P[3].churn);
+    const billersU=phU[0];
+    const upgCash=(mig+billersU)*ePrice(3);
+    for(let j=0;j<11;j++) phU[j]=phU[j+1];
+    phU[11]=billersU+mig;
     legArr[m]=A.startMRR*Math.pow(1-A.churnLeg,m+1);   // le churn mord dès le 1er mois (mai) : startMRR = MRR d'entrée, déjà décrémenté
     const legSubs=A.arpuOld>0?legArr[m]/A.arpuOld:0;
     const subsTotal=legSubs+cohortAct+upgArr[m];
@@ -263,7 +270,7 @@ function runModel(A,opts){
     upsArr[m]=ups;
     totArr[m]=legArr[m]+cohortRev+upgRev;  // MRR abonnement total
     netArr[m]=totArr[m]+ups;               // CA net ACCRUAL (MRR) = abonnement lissé + upsells
-    cashArr[m]=legArr[m]+cohortCash+upgRev+ups;   // CA ENCAISSÉ RÉEL (facturation par cycle)
+    cashArr[m]=legArr[m]+cohortCash+upgCash+ups;   // CA ENCAISSÉ RÉEL (facturation par cycle, upgrade annuel encaissé day-1)
     subs[m]=subsTotal;
   }
   const R={months:[],mrr_legacy:legArr,mrr_new:newArr,mrr_total:totArr,upsell_rev:upsArr,net_rev:netArr,cash_rev:cashArr,active_subs:subs,clients:clients,upg:upgArr,meta_spend:meta,
