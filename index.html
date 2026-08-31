@@ -108,6 +108,7 @@
     <button data-tab="cash">Trésorerie</button>
     <button data-tab="cashreal">Trésorerie réelle</button>
     <button data-tab="rbf">RBF Oneleaf</button>
+    <button data-tab="eliott">Prêt Eliott</button>
   </div>
 </header>
 
@@ -201,6 +202,24 @@
       <div class="panel"><h2>Plan annuel 5 ans — coût de croissance RBF intégré</h2>
         <div style="overflow-x:auto"><table class="dt" id="rbfTable"></table></div>
         <div class="foot" id="rbffoot"></div></div>
+    </section>
+
+    <section class="tabpane" id="pane-eliott">
+      <div class="bulk" style="flex-wrap:wrap">
+        <div class="b"><label>Montant prêté / mois (€)</label><input id="el_montant" type="number" step="10000" value="200000"></div>
+        <div class="b"><label>Taux d'intérêt (%/an)</label><input id="el_taux" type="number" step="0.5" value="12"></div>
+        <div class="b"><label>Durée remb. capital (mois)</label><input id="el_duree" type="number" step="1" value="7"></div>
+        <div class="b"><label>Nb de mois où tu prêtes (0 = tous)</label><input id="el_mois" type="number" step="1" value="0"></div>
+        <div class="b"><label>Cash perso dispo (€)</label><input id="el_dispo" type="number" step="50000" value="1200000"></div>
+      </div>
+      <p class="note" style="margin:0 0 12px">Tu prêtes <b>X € chaque mois</b> à la boîte. Ton <b>capital te revient linéairement sur N mois</b> (remboursement mensuel), plus les <b>intérêts</b> sur ton encours. On calcule ton <b>encours net réel</b> (le cash vraiment sorti à l'instant T), ton <b>pic</b> à mobiliser, et ce que ça te rapporte. Comme tu te rembourses au fil de l'eau, ton encours plafonne à <b>montant × (durée+1)/2</b> — jamais la somme brute des prêts.</p>
+      <div class="kpis" id="elKpis"></div>
+      <div class="panel"><h2>Ton encours &amp; tes intérêts cumulés</h2><p class="csub">Encours = capital réellement sorti (net des remboursements mensuels). Le pic = cash max à mobiliser.</p>
+        <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Encours (cash sorti)</span><span><span class="dash" style="border-top-color:#1D9E75"></span>Cumul intérêts perçus</span></div>
+        <div class="chartwrap lg"><canvas id="elChart"></canvas></div></div>
+      <div class="panel"><h2>Détail mensuel — ton compte perso</h2>
+        <div class="scroll"><table class="dt" id="elTable"></table></div>
+        <div class="foot" id="elfoot"></div></div>
     </section>
 
   </main>
@@ -804,7 +823,7 @@ document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCas
 function recompute(){
   R=runModel(A);
   document.getElementById('acqfoot').textContent='Total clients acquis sur l\'horizon : '+fInt(R.clients.reduce((a,b)=>a+b,0))+' · MRR base de départ : '+fUSD(A.startMRR)+'.';
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();}
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='eliott'){syncElInputs();renderEliott();}
   saveState('auto');
 }
 
@@ -837,7 +856,7 @@ document.querySelectorAll('.pnltoggle button').forEach(b=>b.onclick=()=>{pnlMode
 document.getElementById('tabbar').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+tab));
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();}};
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();}else if(tab==='eliott'){syncElInputs();renderEliott();}};
 document.getElementById('csvbtn').onclick=()=>{
   const keys=['months','meta_spend','clients','active_subs','mrr_legacy','mrr_new','mrr_total','upsell_rev','net_rev','total_cogs','gross_profit','meta','total_opex','ebitda','net_cf','cash_end'];
   let csv=keys.join(',')+'\n';
@@ -948,6 +967,53 @@ function syncRbfInputs(){
     rbf_ratio:v=>RBF.ratio=Math.max(0,v)/100,rbf_rate:v=>RBF.rate=Math.max(0,v)/100,
     rbf_term:v=>RBF.term=Math.max(1,Math.round(v)),rbf_cactgt:v=>RBF.cacTarget=Math.max(0,v)};
   Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderRBF();});});
+})();
+
+/* ============ Prêt Eliott : financement perso avec remboursement mensuel du capital ============ */
+const EL={montant:200000,taux:0.12,duree:7,moisPret:0,dispo:1200000};
+let elChartObj;
+function computeEliott(){
+  const N=A.horizon, M=EL.montant, D=Math.max(1,Math.round(EL.duree)), rate=EL.taux, nLend=(EL.moisPret>0?Math.min(EL.moisPret,N):N);
+  const inj=[],capR=[],intr=[],enc=[],net=[],cumI=[]; let prev=0,ci=0;
+  for(let m=0;m<N;m++){
+    const injm=(m<nLend)?M:0;                                  // ce que tu prêtes ce mois
+    let cr=0; for(let t=Math.max(0,m-D);t<m;t++){ if(t<nLend) cr+=M/D; }   // capital remboursé (linéaire, sur D mois par tranche)
+    const im=prev*rate/12;                                     // intérêts sur l'encours du mois précédent
+    const em=prev+injm-cr;                                     // nouvel encours
+    ci+=im;
+    inj.push(injm);capR.push(cr);intr.push(im);enc.push(em);net.push(-injm+cr+im);cumI.push(ci);
+    prev=em;
+  }
+  return {inj,capR,intr,enc,net,cumI,N,pic:Math.max(...enc),totI:ci};
+}
+function renderEliott(){
+  const X=computeEliott(), R=runModel(A), L=R.months;
+  const libre=EL.dispo-X.pic, netTax=X.totI*0.7;
+  const cards=[
+    {k:'PIC de cash à sortir',v:fShort(X.pic),d:'encours max',cls:'neg'},
+    {k:'Cash perso restant libre',v:fShort(libre),d:'sur '+fShort(EL.dispo),cls:libre>=0?'pos':'neg'},
+    {k:'Intérêts perçus (brut)',v:fShort(X.totI),d:'sur '+X.N+' mois'},
+    {k:'Intérêts nets',v:fShort(netTax),d:'après flat tax 30%',cls:'pos'},
+  ];
+  document.getElementById('elKpis').innerHTML=cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+  if(typeof Chart!=='undefined'){
+    elChartObj&&elChartObj.destroy();
+    const so=opts(fShort); so.scales.i={position:'right',beginAtZero:true,grid:{display:false},ticks:{font:{size:11},color:'#1D9E75',callback:fShort}};
+    elChartObj=new Chart(document.getElementById('elChart'),{data:{labels:L,datasets:[
+      {type:'line',label:'Encours (cash sorti)',data:X.enc,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,yAxisID:'y'},
+      {type:'line',label:'Cumul intérêts',data:X.cumI,borderColor:'#1D9E75',borderDash:[6,4],borderWidth:2,pointRadius:0,tension:0.3,yAxisID:'i'}]},
+      options:{...so,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}});
+  }
+  let h='<thead><tr><th>Mois</th><th>Injection</th><th>Capital remb.</th><th>Intérêts</th><th>Flux net perso</th><th>Encours</th></tr></thead><tbody>';
+  for(let i=0;i<X.N;i++)h+=`<tr><td>${L[i]}</td><td class="neg">${X.inj[i]?fUSD(-X.inj[i]):'—'}</td><td style="color:#0F6E56">${X.capR[i]?fUSD(X.capR[i]):'—'}</td><td style="color:#0F6E56">${X.intr[i]?fUSD(X.intr[i]):'—'}</td><td class="${X.net[i]<0?'neg':''}">${fUSD(X.net[i])}</td><td class="${X.enc[i]<0?'neg':''}"><b>${fUSD(X.enc[i])}</b></td></tr>`;
+  document.getElementById('elTable').innerHTML=h+'</tbody>';
+  document.getElementById('elfoot').innerHTML='Tu prêtes '+fUSD(EL.montant)+'/mois, capital remboursé sur <b>'+EL.duree+' mois</b> (linéaire) + intérêts <b>'+(EL.taux*100).toFixed(0)+'%/an</b> sur l\'encours. Régime établi : encours ≈ '+fUSD(EL.montant*(EL.duree+1)/2)+' (= montant × (durée+1)/2). Flux net perso négatif = cash que tu sors ; positif = cash qui te revient (capital + intérêts).';
+}
+function syncElInputs(){const g=id=>document.getElementById(id);if(!g('el_montant'))return;
+  g('el_montant').value=EL.montant;g('el_taux').value=+(EL.taux*100).toFixed(2);g('el_duree').value=EL.duree;g('el_mois').value=EL.moisPret;g('el_dispo').value=EL.dispo;}
+(function wireElInputs(){
+  const map={el_montant:v=>EL.montant=Math.max(0,v),el_taux:v=>EL.taux=Math.max(0,v)/100,el_duree:v=>EL.duree=Math.max(1,Math.round(v)),el_mois:v=>EL.moisPret=Math.max(0,Math.round(v)),el_dispo:v=>EL.dispo=Math.max(0,v)};
+  Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderEliott();});});
 })();
 
 /* boot */
