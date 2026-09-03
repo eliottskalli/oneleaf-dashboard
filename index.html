@@ -109,6 +109,7 @@
     <button data-tab="cashreal">Trésorerie réelle</button>
     <button data-tab="rbf">RBF Oneleaf</button>
     <button data-tab="eliott">Prêt Eliott</button>
+    <button data-tab="datareel">Data réel</button>
   </div>
 </header>
 
@@ -218,6 +219,14 @@
       <div class="panel"><h2>Détail mensuel — ton compte perso</h2>
         <div class="scroll"><table class="dt" id="elTable"></table></div>
         <div class="foot" id="elfoot"></div></div>
+    </section>
+
+    <section class="tabpane" id="pane-datareel">
+      <p class="note" style="margin:0 0 12px">Entre ta <b>dépense Meta exacte</b> et ton <b>CAC exact</b> par mois (colonnes éditables). Le reste se calcule : clients acquis (dépense ÷ CAC), <b>LTV/CAC réel</b>, ROAS J0 et payback — sur la base de la LTV du modèle (<b id="dr_ltv"></b>/client).</p>
+      <div class="kpis" id="drKpis"></div>
+      <div class="panel"><h2>Suivi réel — dépense Meta &amp; CAC par mois</h2>
+        <div class="scroll"><table class="grid" id="drTable"></table></div>
+        <div class="foot" id="drfoot"></div></div>
     </section>
 
   </main>
@@ -821,7 +830,7 @@ document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCas
 function recompute(){
   R=runModel(A);
   document.getElementById('acqfoot').textContent='Total clients acquis sur l\'horizon : '+fInt(R.clients.reduce((a,b)=>a+b,0))+' · MRR base de départ : '+fUSD(A.startMRR)+'.';
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='eliott'){syncElInputs();renderEliott();}
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='eliott'){syncElInputs();renderEliott();} else if(tab==='datareel'){renderDataReel();}
   saveState('auto');
 }
 
@@ -854,7 +863,7 @@ document.querySelectorAll('.pnltoggle button').forEach(b=>b.onclick=()=>{pnlMode
 document.getElementById('tabbar').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+tab));
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();}else if(tab==='eliott'){syncElInputs();renderEliott();}};
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();}else if(tab==='eliott'){syncElInputs();renderEliott();}else if(tab==='datareel'){renderDataReel();}};
 document.getElementById('csvbtn').onclick=()=>{
   const keys=['months','meta_spend','clients','active_subs','mrr_legacy','mrr_new','mrr_total','upsell_rev','net_rev','total_cogs','gross_profit','meta','total_opex','ebitda','net_cf','cash_end'];
   let csv=keys.join(',')+'\n';
@@ -1012,6 +1021,61 @@ function syncElInputs(){const g=id=>document.getElementById(id);if(!g('el_taux')
   const map={el_taux:v=>EL.taux=Math.max(0,v)/100,el_buffer:v=>EL.buffer=Math.max(0,v),el_dispo:v=>EL.dispo=Math.max(0,v)};
   Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderEliott();});});
 })();
+
+/* ============ Data réel : dépense Meta exacte + CAC exact par mois ============ */
+function cohortCumul(A){
+  const P=A.products;
+  const eF=k=>P[k].first+(P[k].eliteShare||0)*((P[k].eliteFirst||P[k].first)-P[k].first);
+  const eP=k=>P[k].monthly+(P[k].eliteShare||0)*((P[k].elitePrice||P[k].monthly)-P[k].monthly);
+  const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));
+  const cum=[]; let c=0;
+  for(let m=0;m<=60;m++){ let cash=0;
+    for(let k=0;k<4;k++){ if(m===0) cash+=P[k].mix*eF(k); else if(m%CYC[k]===0) cash+=P[k].mix*Math.pow(1-P[k].churn,m)*eP(k); }
+    c+=cash; cum.push(c); }
+  return cum;   // cash cumulé encaissé par client acquis (mix), mois par mois
+}
+function paybackAt(cum,cac){ for(let m=0;m<cum.length;m++){ if(cum[m]>=cac) return m; } return Infinity; }
+function buildDrTable(){
+  A.metaReal=A.metaReal||[]; A.cacReal=A.cacReal||[];
+  if(A.metaReal.every(v=>!v)){ A.metaReal[0]=140000; A.metaReal[1]=270000; A.metaReal[2]=254000; }  // pré-remplissage : tes réels juin/juil/août
+  const N=A.horizon, start=new Date(A.startY,A.startM-1,1), e=unitEcon(A), cum=cohortCumul(A);
+  const lt=document.getElementById('dr_ltv'); if(lt)lt.textContent=fUSD(e.ltv);
+  let h='<thead><tr><th>Mois</th><th>Dépense Meta réelle ($)</th><th>CAC réel ($)</th><th>Clients acquis</th><th>LTV/CAC</th><th>ROAS J0</th><th>Payback (mois)</th></tr></thead><tbody>';
+  for(let m=0;m<N;m++){
+    const d=new Date(start.getFullYear(),start.getMonth()+m,1), lbl=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const sp=A.metaReal[m]>0?A.metaReal[m]:0, ca=A.cacReal[m]>0?A.cacReal[m]:0;
+    const cl=(sp>0&&ca>0)?sp/ca:0, lc=ca>0?e.ltv/ca:0, ro=ca>0?e.firstCash/ca:0, pb=ca>0?paybackAt(cum,ca):Infinity;
+    h+=`<tr><td>${lbl}</td>`
+      +`<td><input type="number" step="1000" data-dm="${m}" value="${sp>0?sp:''}" placeholder="0"></td>`
+      +`<td><input type="number" step="1" data-dc="${m}" value="${ca>0?ca:''}" placeholder="${A.cac}"></td>`
+      +`<td class="calc">${cl?fInt(cl):'—'}</td>`
+      +`<td class="calc" style="${lc?('color:'+(lc>=1?'#0F6E56':'#D85A30')):''}">${lc?lc.toFixed(2)+'x':'—'}</td>`
+      +`<td class="calc">${ro?(ro*100).toFixed(0)+'%':'—'}</td>`
+      +`<td class="calc">${ca>0?(isFinite(pb)?'M'+pb:'>60'):'—'}</td></tr>`;
+  }
+  const t=document.getElementById('drTable'); t.innerHTML=h+'</tbody>';
+  t.oninput=ev=>{const el=ev.target;
+    if(el.dataset.dm!==undefined){A.metaReal[+el.dataset.dm]=parseFloat(el.value)||0;}
+    else if(el.dataset.dc!==undefined){A.cacReal[+el.dataset.dc]=parseFloat(el.value)||0;}
+    else return;
+    clearTimeout(debounce); debounce=setTimeout(()=>{drKpis();buildDrTable();saveState('auto');},300);
+  };
+}
+function drKpis(){
+  const e=unitEcon(A), cum=cohortCumul(A); let totSp=0,totCl=0;
+  for(let m=0;m<A.horizon;m++){const sp=(A.metaReal||[])[m]>0?A.metaReal[m]:0,ca=(A.cacReal||[])[m]>0?A.cacReal[m]:0; if(sp>0&&ca>0){totSp+=sp;totCl+=sp/ca;}}
+  const bcac=totCl>0?totSp/totCl:0, lc=bcac>0?e.ltv/bcac:0;
+  const cards=[
+    {k:'Dépense Meta totale',v:fShort(totSp),d:'saisie'},
+    {k:'Clients acquis',v:fInt(totCl),d:'total'},
+    {k:'CAC blended réel',v:bcac>0?fUSD(bcac):'—',d:'dépense ÷ clients'},
+    {k:'LTV / CAC réel',v:bcac>0?lc.toFixed(2)+'x':'—',d:'LTV '+fUSD(e.ltv),cls:lc>=1?'pos':'neg'},
+    {k:'Payback au CAC réel',v:bcac>0?'M'+paybackAt(cum,bcac):'—',d:bcac>0?('ROAS J0 '+(e.firstCash/bcac*100).toFixed(0)+'%'):'—'},
+  ];
+  const k=document.getElementById('drKpis'); if(k)k.innerHTML=cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+  const f=document.getElementById('drfoot'); if(f)f.innerHTML='Clients = dépense ÷ CAC. LTV/CAC = LTV modèle ('+fUSD(e.ltv)+'/client) ÷ ton CAC réel. Payback = mois où le cash cumulé par client atteint ton CAC. Juin/juil/août pré-remplis (à ajuster).';
+}
+function renderDataReel(){ buildDrTable(); drKpis(); }
 
 /* boot */
 try{const _s=new URLSearchParams(location.search).get('s'); if(_s==='A'||_s==='B')scenario=_s;}catch(e){}
