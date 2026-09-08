@@ -185,6 +185,7 @@
 
     <section class="tabpane" id="pane-rbf">
       <div class="bulk" style="flex-wrap:wrap">
+        <div class="b"><label>Mois de démarrage RBF</label><select id="rbf_start"></select></div>
         <div class="b"><label>Spend cible (€/mois)</label><input id="rbf_target" type="number" step="10000" value="1000000"></div>
         <div class="b"><label>Mois pour atteindre la cible</label><input id="rbf_ramp" type="number" step="1"></div>
         <div class="b"><label>% du spend financé</label><input id="rbf_ratio" type="number" step="5" value="100"></div>
@@ -192,7 +193,7 @@
         <div class="b"><label>Durée remboursement (mois)</label><input id="rbf_term" type="number" step="1" value="6"></div>
         <div class="b"><label>CAC au spend cible (€)</label><input id="rbf_cactgt" type="number" step="1" placeholder="constant"></div>
       </div>
-      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b> : chaque mois de dépense est avancé par le financeur, puis remboursé sur la durée choisie au coût indiqué (1 %/mois × durée ≈ le coût total par avance). Le plan monte <b>graduellement jusqu'au spend cible</b>. On compare la trésorerie <b>avec</b> et <b>sans</b> RBF sous le même plan de croissance, et on chiffre le coût total pour la boîte.</p>
+      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b>, <b>à partir du mois de démarrage choisi</b> (avant : Meta payé cash comme aujourd'hui). Le financeur avance le spend financé ; le <b>cash de chaque cohorte financée le rembourse</b> jusqu'à <b>100%</b> (payback), puis revient sur le compte. Les <b>cohortes passées et pré-RBF</b> restent 100% à la boîte. Les <b>intérêts</b> (coût de l'avance) sont payés <b>uniquement au mois où la cohorte atteint 100%</b>. On compare la trésorerie <b>avec</b> et <b>sans</b> RBF sous le même plan de croissance.</p>
       <div class="kpis" id="rbfKpis"></div>
       <div class="panel"><h2>Trésorerie — avec vs sans RBF</h2><p class="csub">Même plan de croissance (montée vers le spend cible). Le RBF lisse la sortie Meta et remonte le point bas ; en régime établi il ne réduit plus le besoin, il le décale et ajoute son coût.</p>
         <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec RBF</span><span><span class="dash" style="border-top-color:#888780"></span>Sans RBF</span></div>
@@ -385,7 +386,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="cJfU01d7z8wyYjOIVmmSjw==.523tpOwcV4Sklqbd.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";
+const HOSTED_DATA="1LyTr4wx9LWWj5/XGvUi0A==.HRpge+bk4OYGq8pD.PxR9hasvCWArFesveIc7o46JJdrza4ZfUMgCf9s2Yisad1UwBDYBU4yFJ5f4TnrsoWxc4yJ6/cYcYeAg+OXJs0TfDrKIbQr6XDTqUK+Nfp5k5K6x8ps1hS8qMmk8HdeWvHoc99r8tNX5xnCynWaZmwLuv7PnS+QmzRRrqYhNBZ3ltLeGf/pAU5ChhmjnyHCunnLhCM1J3ZnsJrtUGyeThQPsHxanSbPTnMTd+02ckE1cLSfzeAZLYERO+JSnA+A58cTBgf6dkr2NXLOXexG26AvaBhW2AbvmmQC9eaylwyscyLo1W3TpXkUhuYTw0HsKfzZ4palFK9yfrgWCi6RC3FN2hMebyW91e9jK9IQ6SKAr10JLCex9K2fIsmDeU5x7Gwk0yWGFj+/UWv01s/sj5UjLCsXRjjnt+08F8JXcYSxbaR3f99M6Ks16ikB8SP/r/6hd+Nfm3R8kCsY44SY3x9srfQT/d0serlzExqAmEY13Tvt4uNVobxElg3TiLBKYkjXqjeBDmADRFs6HjsjgIOwP7EAOwgjzyprLBrliBQwQkpZr+FmVNBgSGOFmLFM/wc8WV1k6NHjoFeErdiWE9v4GgkeDkRXTRQAbZkPOyIHiCpvqba0h4WBR+Cp2Aba8MZBlOc9EUl8UlG2shAECjus+XN/yJpktZsRaRhDoxlREIThPRTjYsh452Gof23KD6K+YuVBn2yo+VcpMtHk52sJRae3FD1Gc67jOP/vVipUF0OFSUEeJD6Hwfyq6KVyQrduNp6TbEye3enixm507i4G7uhXlSnHELsmlDsWEvjYFai/JwYdBA1O+rT0A5WJZE0s9ceqAGTSfYlxagqkbJKmguVWNPoo04wFjwFfFwHE1RXifFtv2JFpUveXIznagIERtnEbtlaiBUMKNmOW+TqeMFNzDMaGXJzyGuUQRzoeD6VYuckKWpKYY84l9kv4MHtpWC69WF9MYijo1HBBF4SN9MlW3qGnrYfiZ57cTxhINxg22ZghWqxNZ4xrQeNsapIBkW0GB/Z/g94OfvlSYUkX5VIVN0BJUtHgSx1sxcFvl1HZjpAjEHbQOrshY8HY+g6OxSGptpX1BfH569qBTAqKifb8vj12ueg6130d7EJs5QkAujuCgVIAzlVu5i71sQ0Gur/MJf6knUfTidQPNcV+HQalvlN0aPMUx74geV76yP9YuNRxJW+tNSjZxmk+nWIROcq8JOWNIynZbni9ferL2DufJ9vXYiap8g+lqZiEqaC2JPXodQbU2O93Iy0G1GJtCYxo5wdbXQa5bNbcPX8uEdMEvR8XuvyF9KJnojgRjV/N1uhzzm28iV7qk1fuDhcHHICbKsyituXMivlicbDhTpNK5tmeGen6tah0aU2D6yhOicfHCXjsOtsIVpX7lq9jNWT1MsYfcy1TRepbcOYfH6xFGUNu+S+ZjQCx7S9n7xN4pG6JA4jD81IVrv9Q45B6viB4ifYnKXGb7WBKts98h8NPfw0D8V8K0K2KsNG/aHuYhWaB6d70b/0x4JfLm3pURPygJv3T2HhKbUnafB6Ymne2zLYwDaaNh9VF9YLnLBI6txJE8cJwBlSJDE6iindFziNXU0zEXwdStz8A3zfYNDzHvUuC0PDNZttpAfHiFjuFkJCcU8ErfuPMoMZ30iIE9KQ0xnXUuJDr6oQRHjid1RltvcXoq5r/xx158uxNpE2HmGTx6fDVD0eM4SBWpEjb2vpCwNLQ8ec5H6LUTjWQHOfBo1UqR6DOmVsCAWitrM3HcbgLqsN9QnKGNMkUdaP/jqx7RlKlEthiHY2G3WSSeyiaZqqidvQV8iyxP+Rz2xhpflXWtbsiM2K+HzFtIY7yOkp4agEehC1tVzbkNuUHxiDbDfUPl1KR7J22dNFMkxLan+RlCW7bq9d+vFFc8yo8JGODQv5S8R948Eb6Ndjqz/YwU3h79JA5nQAFP+eKhIQOdujtf7noSjmiad9HKTAcY4MBBSaAmUkxklEayrc3Yyv2LIl4BO4guYpELbBL+N0U1EtWAns7exWPBjp5MwrOCIjSTzZ3ZfxiRn6MrFJZ6wh3KBKsAdbFG51Ky57cIqh9AzvMiO8lCAVDBNOAajKlReGzBSEv2J0Ld4uziajTsfsFR/zb/KAVC7w1ZLhihNdzbfq/oZbIEeeck2VxeDXZ39A4BQHg2MjBWceFUtrrHE+UnMonlA91jb1E7X+GmoRjougD13IoN4NLMIqbSwaYSYlvJoi+70AroK2LGYrEBPsRqlMS86dp7cBAbMTzn/o54AaQ03dR6QZoB3IKpszyQP7GhBTakfKqbEjllB47iTaxIPnfvFm+5Aqobm5GW61w9x/p2kE3NGp01pPe+2J3vbFJn+bkg7bTtZ3s6ak+zlcBDJFhb5VtEKi76/voO5UDzLcI1af2HimVrkviu5RwJfEuVpa8flZlIyp52Cu+/tCqq7b4=";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -875,7 +876,7 @@ document.getElementById('importFile').onchange=e=>{if(e.target.files[0])importJS
 /* On finance la depense Meta par du RBF. Chaque avance = spend finance du mois,
    rembourse sur `term` mois au cout `rate`/mois (total ~ rate x term par avance).
    Effet : la grosse sortie Meta (payee a 30 j) est lissee sur `term` mois + un cout de financement. */
-const RBF={ target:1000000, rampMonths:null, ratio:1, rate:0.01, term:6, cacTarget:0 };
+const RBF={ target:1000000, rampMonths:null, ratio:1, rate:0.01, term:6, cacTarget:0, startMonth:0 };
 const fEur=v=>(v<0?'-':'')+'€'+Math.abs(Math.round(v)).toLocaleString('fr-FR');
 const fEurShort=v=>{const a=Math.abs(v);let s=a>=1e6?(a/1e6).toFixed(2)+' M€':a>=1e3?Math.round(a/1e3)+' k€':Math.round(a)+' €';return (v<0?'-':'')+s;};
 function rbfMeta(){
@@ -894,21 +895,35 @@ function runRBF(){
   });
   const R0=runModel(Ar,{cacArr});
   const N=Ar.horizon, ratio=RBF.ratio, rate=RBF.rate, term=Math.max(1,Math.round(RBF.term));
-  const F=Ar.meta.map(sp=>sp*ratio);                 // avance = portion financee du spend
-  const ff=1+rate*term, avoided=new Array(N).fill(0), repay=new Array(N).fill(0);
-  for(let m=0;m<N;m++){
-    if(m+1<N) avoided[m+1]+=F[m];                    // Meta du mois m paye a m+1 : le RBF le couvre
-    const inst=F[m]*ff/term;                         // mensualite = (principal + frais) / duree
-    for(let j=1;j<=term;j++){ if(m+j<N) repay[m+j]+=inst; }
+  const startM=Math.max(0,Math.min(N-1,Math.round(RBF.startMonth||0)));   // 1er mois financé (avant : Meta payé cash)
+  const cum=cohortCumul(A);                              // cash cumulé encaissé par client acquis (mix), t=0..60
+  const overlay=new Array(N).fill(0);                   // effet NET du RBF sur la trésorerie, mois par mois
+  const rbfCostMo=new Array(N).fill(0);                 // intérêts reconnus AU mois où la cohorte atteint 100%
+  let totalCost=0, totalFin=0;
+  for(let m=startM;m<N;m++){
+    const adv=ratio*Ar.meta[m];                         // avance = portion financée du spend du mois m
+    if(adv<=0) continue;
+    totalFin+=adv;
+    const cac_m=cacArr[m]||A.cac, custs=cac_m>0?Ar.meta[m]/cac_m:0;
+    if(m+1<N) overlay[m+1]+=adv;                        // le financeur règle la facture Meta (payée à m+1)
+    /* le cash de la cohorte financée sert à rembourser le principal ; il ne revient à la boîte qu'APRÈS le 100% */
+    let remain=adv, pb=-1, lim=Math.min(N-m,cum.length);
+    for(let t=1;t<lim;t++){
+      const incr=(t===1?cum[1]:cum[t]-cum[t-1])*custs;  // cash encaissé par la cohorte ce mois (intro inclus au 1er)
+      const take=Math.min(remain,incr);
+      overlay[m+t]-=take;                               // ce cash part au financeur, pas sur le compte
+      remain-=take;
+      if(remain<=1e-6){ pb=t; break; }
+    }
+    if(pb<0) pb=lim-1;                                   // 100% pas atteint dans l'horizon : borne
+    const fee=adv*rate*term;                             // intérêts = coût total de l'avance
+    const fm=Math.min(m+pb,N-1);
+    overlay[fm]-=fee;                                    // ⚑ intérêts payés UNIQUEMENT au mois du 100%
+    rbfCostMo[fm]+=fee; totalCost+=fee;
   }
-  const rbfCf=[],cashRbf=[],rbfCostMo=[]; let cum=0, outstanding=0;
-  for(let m=0;m<N;m++){
-    const cf=avoided[m]-repay[m]; cum+=cf;
-    rbfCf.push(cf); cashRbf.push(R0.cash_end[m]+cum);
-    rbfCostMo.push(F[m]*rate*term);                  // frais total de l'avance du mois m (reconnu a la souscription)
-  }
-  const totalCost=F.reduce((a,x)=>a+x*rate*term,0), totalSpend=Ar.meta.reduce((a,x)=>a+x,0);
-  return {R0,meta:Ar.meta,F,rbfCf,cashRbf,rbfCostMo,totalCost,totalSpend,cacArr};
+  const rbfCf=overlay, cashRbf=[]; let c=0;
+  for(let m=0;m<N;m++){ c+=overlay[m]; cashRbf.push(R0.cash_end[m]+c); }
+  return {R0,meta:Ar.meta,rbfCf,cashRbf,rbfCostMo,totalCost,totalSpend:totalFin,cacArr,startM};
 }
 let rbfCashObj,rbfSpendObj;
 function renderRBF(){
@@ -958,10 +973,12 @@ function renderRBF(){
     html+=`<td class="${tot<0?'neg':''}"><b>${isInt?fInt(tot):fEur(tot)}</b></td></tr>`;
   }
   document.getElementById('rbfTable').innerHTML=html+'</tbody>';
-  document.getElementById('rbffoot').innerHTML='Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. Les remboursements des dernieres avances se poursuivent au-dela de l\'horizon (le cash final ne porte pas encore ce reliquat).';
+  document.getElementById('rbffoot').innerHTML='Démarrage RBF : <b>'+R0.months[X.startM]+'</b>. Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta financé. Intérêts payés <b>au mois du 100%</b> de chaque cohorte (pic de coût décalé au payback). Le cash des cohortes financées rembourse le principal puis revient à la boîte ; cohortes pré-RBF & legacy 100% à la boîte. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. ⚠ Le « cash final » porte encore le <b>float des avances récentes non encore remboursées</b> (payback au-delà de l\'horizon) : le vrai coût soldé du RBF est le <b>« Coût total RBF »</b> ci-dessus.';
 }
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
+  const sel=g('rbf_start');
+  if(sel){ const N=A.horizon; let o=''; for(let i=0;i<N;i++){ const d=new Date(A.startY,A.startM-1+i,1); o+=`<option value="${i}">${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}</option>`; } sel.innerHTML=o; sel.value=Math.max(0,Math.min(N-1,RBF.startMonth||0)); }
   g('rbf_target').value=RBF.target;
   g('rbf_ramp').value=RBF.rampMonths||A.horizon;
   g('rbf_ratio').value=Math.round(RBF.ratio*100);
@@ -974,6 +991,8 @@ function syncRbfInputs(){
     rbf_ratio:v=>RBF.ratio=Math.max(0,v)/100,rbf_rate:v=>RBF.rate=Math.max(0,v)/100,
     rbf_term:v=>RBF.term=Math.max(1,Math.round(v)),rbf_cactgt:v=>RBF.cacTarget=Math.max(0,v)};
   Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderRBF();});});
+  const sel=document.getElementById('rbf_start');
+  if(sel)sel.addEventListener('change',()=>{RBF.startMonth=Math.max(0,Math.round(parseFloat(sel.value)||0));renderRBF();});
 })();
 
 /* ============ Prêt Eliott : financement perso avec remboursement mensuel du capital ============ */
