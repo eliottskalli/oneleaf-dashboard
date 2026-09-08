@@ -188,12 +188,12 @@
         <div class="b"><label>Mois de démarrage RBF</label><select id="rbf_start"></select></div>
         <div class="b"><label>Spend cible (€/mois)</label><input id="rbf_target" type="number" step="10000" value="1000000"></div>
         <div class="b"><label>Mois pour atteindre la cible</label><input id="rbf_ramp" type="number" step="1"></div>
-        <div class="b"><label>% du spend financé</label><input id="rbf_ratio" type="number" step="5" value="100"></div>
-        <div class="b"><label>Coût RBF (%/mois)</label><input id="rbf_rate" type="number" step="0.1" value="1"></div>
-        <div class="b"><label>Durée remboursement (mois)</label><input id="rbf_term" type="number" step="1" value="6"></div>
+        <div class="b"><label>% du spend financé (PvX)</label><input id="rbf_ratio" type="number" step="5" value="80"></div>
+        <div class="b"><label>Coût PvX (%/mois sur encours)</label><input id="rbf_rate" type="number" step="0.1" value="1"></div>
+        <div class="b"><label>% du CA cohorte prélevé /mois</label><input id="rbf_term" type="number" step="5" value="80"></div>
         <div class="b"><label>CAC au spend cible (€)</label><input id="rbf_cactgt" type="number" step="1" placeholder="constant"></div>
       </div>
-      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b>, <b>à partir du mois de démarrage choisi</b> (avant : Meta payé cash comme aujourd'hui). Le financeur avance le spend financé (il règle ta facture Meta). Tu <b>gardes 100% de ton cash</b> — cohorte financée, cohortes passées et legacy. Tu rembourses le financeur — <b>principal + intérêts en un seul versement</b> — au mois où la cohorte financée atteint <b>100%</b> (payback). Entre les deux, tu détiens l'avance <b>et</b> ton cash qui rentre : la trésorerie grimpe donc bien plus vite. On compare la trésorerie <b>avec</b> et <b>sans</b> RBF sous le même plan de croissance.</p>
+      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b>, <b>à partir du mois de démarrage choisi</b> (avant : Meta payé cash comme aujourd'hui). Deal <b>PvX</b> (revenue-share) : PvX finance <b>80% de ton spend Meta</b> et te le rembourse à <b>M+1</b>. Ensuite il <b>prélève 80% du CA de chaque cohorte financée</b>, chaque mois (netté sur les décaissements suivants, dès M+2), jusqu'à récupérer son avance + <b>1%/mois d'intérêts sur l'encours</b> — les <b>20% restants</b> du CA restent chez toi, comme <b>100% du CA des cohortes passées et de la legacy</b>. On compare la trésorerie <b>avec</b> et <b>sans</b> PvX sous le même plan de croissance.</p>
       <div class="kpis" id="rbfKpis"></div>
       <div class="panel"><h2>Trésorerie — avec vs sans RBF</h2><p class="csub">Même plan de croissance (montée vers le spend cible). Le RBF lisse la sortie Meta et remonte le point bas ; en régime établi il ne réduit plus le besoin, il le décale et ajoute son coût.</p>
         <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec RBF</span><span><span class="dash" style="border-top-color:#888780"></span>Sans RBF</span></div>
@@ -205,7 +205,7 @@
         <div style="overflow-x:auto"><table class="dt" id="rbfTable"></table></div>
         <div class="foot" id="rbffoot"></div></div>
       <div class="panel"><h2>Trésorerie mois par mois — détail RBF</h2>
-        <p class="csub">Chaque mois : avance reçue (le financeur paie Meta) − principal & intérêts remboursés en un versement au mois du 100% de la cohorte = flux RBF net. La boîte garde tout son cash entre-temps ; la trésorerie avec vs sans RBF est comparée à droite.</p>
+        <p class="csub">Chaque mois : avance PvX reçue (80% du spend, à M+1) − principal & intérêts prélevés sur le CA de la cohorte (80% du CA, dès M+2) = flux PvX net, puis la trésorerie avec vs sans PvX.</p>
         <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" id="rbfMonthly"></table></div></div>
     </section>
 
@@ -879,7 +879,7 @@ document.getElementById('importFile').onchange=e=>{if(e.target.files[0])importJS
 /* On finance la depense Meta par du RBF. Chaque avance = spend finance du mois,
    rembourse sur `term` mois au cout `rate`/mois (total ~ rate x term par avance).
    Effet : la grosse sortie Meta (payee a 30 j) est lissee sur `term` mois + un cout de financement. */
-const RBF={ target:1000000, rampMonths:null, ratio:1, rate:0.01, term:6, cacTarget:0, startMonth:0 };
+const RBF={ target:1000000, rampMonths:null, ratio:0.8, rate:0.01, repayShare:0.8, cacTarget:0, startMonth:0 };
 const fEur=v=>(v<0?'-':'')+'€'+Math.abs(Math.round(v)).toLocaleString('fr-FR');
 const fEurShort=v=>{const a=Math.abs(v);let s=a>=1e6?(a/1e6).toFixed(2)+' M€':a>=1e3?Math.round(a/1e3)+' k€':Math.round(a)+' €';return (v<0?'-':'')+s;};
 function rbfMeta(){
@@ -897,29 +897,34 @@ function runRBF(){
     return A.cac+(ct-A.cac)*frac;
   });
   const R0=runModel(Ar,{cacArr});
-  const N=Ar.horizon, ratio=RBF.ratio, rate=RBF.rate, term=Math.max(1,Math.round(RBF.term));
+  const N=Ar.horizon, fund=RBF.ratio, rate=RBF.rate;    // fund = % du spend financé par PvX ; rate = coût %/mois sur l'encours
+  const share=(RBF.repayShare!=null?RBF.repayShare:fund);  // part du CA de la cohorte prélevée par PvX chaque mois
   const startM=Math.max(0,Math.min(N-1,Math.round(RBF.startMonth||0)));   // 1er mois financé (avant : Meta payé cash)
   const cum=cohortCumul(A);                              // cash cumulé encaissé par client acquis (mix), t=0..60
   const overlay=new Array(N).fill(0);                   // effet NET du RBF sur la trésorerie, mois par mois
-  const rbfCostMo=new Array(N).fill(0);                 // intérêts reconnus AU mois où la cohorte atteint 100%
-  const rbfIn=new Array(N).fill(0);                     // avances reçues (le financeur paie la facture Meta)
-  const rbfPrin=new Array(N).fill(0);                   // principal remboursé au financeur AU mois du 100%
+  const rbfCostMo=new Array(N).fill(0);                 // intérêts payés à PvX, mois par mois
+  const rbfIn=new Array(N).fill(0);                     // avances reçues (PvX rembourse 80% du spend, à M+1)
+  const rbfPrin=new Array(N).fill(0);                   // principal remboursé à PvX (part du CA de la cohorte)
   let totalCost=0, totalFin=0, outAdv=0, outFee=0;
   for(let m=startM;m<N;m++){
-    const adv=ratio*Ar.meta[m];                         // avance = portion financée du spend du mois m
+    const spend=Ar.meta[m], adv=fund*spend;             // avance PvX = part financée du spend du mois m
     if(adv<=0) continue;
     totalFin+=adv;
-    const cac_m=cacArr[m]||A.cac;
-    if(m+1<N){ overlay[m+1]+=adv; rbfIn[m+1]+=adv; }    // le financeur règle la facture Meta (payée à m+1) — la boîte GARDE tout son cash
-    /* la boîte encaisse et garde 100% du cash (cohorte financée + cohortes passées + legacy).
-       On rembourse le financeur — principal + intérêts EN UN SEUL VERSEMENT — au mois où la cohorte financée atteint 100% (payback). */
-    const advPerCust=ratio*cac_m;                       // avance rapportée à 1 client acquis
-    let pb=cum.findIndex(v=>v>=advPerCust); if(pb<0) pb=cum.length-1; pb=Math.max(1,pb);
-    const fee=adv*rate*term;                             // intérêts = coût total de l'avance
-    const fm=m+pb;
-    if(fm<N){ overlay[fm]-=adv; rbfPrin[fm]+=adv;        // remboursement du principal AU 100%
-      overlay[fm]-=fee; rbfCostMo[fm]+=fee; totalCost+=fee; }   // ⚑ intérêts AU 100%
-    else { outAdv+=adv; outFee+=fee; }                  // 100% au-delà de l'horizon : avance encore en cours à la fin
+    const cac_m=cacArr[m]||A.cac, custs=cac_m>0?spend/cac_m:0;
+    if(m+1<N){ overlay[m+1]+=adv; rbfIn[m+1]+=adv; }    // PvX rembourse sa part du spend à M+1 — la boîte encaisse et GARDE 100% de son CA
+    /* Revenue-share PvX : chaque mois PvX prélève `share` du CA encaissé de la cohorte financée (netté sur les décaissements),
+       à partir de M+2, jusqu'à récupérer principal + intérêts (1%/mois sur l'encours). Le reste du CA reste à la boîte. */
+    let P=adv, I=0, settled=false, lim=Math.min(N-m,cum.length);
+    for(let t=2;t<lim;t++){
+      const cal=m+t;
+      I+=(P+I)*rate;                                     // intérêt du mois sur l'encours (principal + intérêts courus)
+      const revThis=(t===2?cum[2]:cum[t]-cum[t-1])*custs;  // CA encaissé de la cohorte ce mois (rattrapage cumulé au 1er prélèvement M+2)
+      let pay=Math.min(share*revThis, P+I);
+      const toI=Math.min(pay,I); I-=toI; const toP=pay-toI; P-=toP;   // les prélèvements couvrent d'abord les intérêts, puis le principal
+      overlay[cal]-=pay; rbfPrin[cal]+=toP; rbfCostMo[cal]+=toI; totalCost+=toI;
+      if(P+I<=1e-6){ settled=true; break; }
+    }
+    if(!settled){ outAdv+=P; outFee+=I; }               // encours restant à l'horizon (principal + intérêts non encore prélevés)
   }
   const rbfCf=overlay, cashRbf=[]; let c=0;
   for(let m=0;m<N;m++){ c+=overlay[m]; cashRbf.push(R0.cash_end[m]+c); }
@@ -996,7 +1001,7 @@ function renderRBF(){
     mh+='</tr>';
   }
   document.getElementById('rbfMonthly').innerHTML=mh+'</tbody>';
-  document.getElementById('rbffoot').innerHTML='Démarrage RBF : <b>'+R0.months[X.startM]+'</b>. Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta financé. Principal + intérêts remboursés <b>en un versement au mois du 100%</b> de chaque cohorte. La boîte <b>garde 100% de son cash</b> (cohorte financée + passées + legacy) jusque-là. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. ⚠ À l\'horizon, <b>'+fEurShort(X.outAdv)+' d\'avances</b> ne sont pas encore remboursées (100% après fin '+R0.months[N-1].slice(0,4)+') : le cash final les porte encore, à solder plus tard (+ '+fEurShort(X.outFee)+' d\'intérêts).';
+  document.getElementById('rbffoot').innerHTML='Démarrage PvX : <b>'+R0.months[X.startM]+'</b>. PvX finance <b>'+Math.round(RBF.ratio*100)+'% du spend Meta</b> (remboursé à M+1), coût <b>'+(+(RBF.rate*100).toFixed(2))+' %/mois sur l\'encours</b>. Remboursement : PvX prélève <b>'+Math.round((RBF.repayShare!=null?RBF.repayShare:RBF.ratio)*100)+'% du CA de la cohorte financée</b> chaque mois (netté, dès M+2) jusqu\'à récupérer principal + intérêts ; le reste du CA reste à la boîte, comme 100% des cohortes passées & legacy. Coût total intérêts sur l\'horizon : <b>'+fEurShort(X.totalCost)+'</b> (hors EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. ⚠ À l\'horizon, <b>'+fEurShort(X.outAdv)+' de principal</b> encore en cours (cohortes récentes non soldées) + '+fEurShort(X.outFee)+' d\'intérêts à venir.';
 }
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
@@ -1006,13 +1011,13 @@ function syncRbfInputs(){
   g('rbf_ramp').value=RBF.rampMonths||A.horizon;
   g('rbf_ratio').value=Math.round(RBF.ratio*100);
   g('rbf_rate').value=+(RBF.rate*100).toFixed(2);
-  g('rbf_term').value=RBF.term;
+  g('rbf_term').value=Math.round((RBF.repayShare!=null?RBF.repayShare:RBF.ratio)*100);
   g('rbf_cactgt').value=RBF.cacTarget||'';
 }
 (function wireRbfInputs(){
   const map={rbf_target:v=>RBF.target=Math.max(0,v),rbf_ramp:v=>RBF.rampMonths=Math.max(2,Math.round(v)),
     rbf_ratio:v=>RBF.ratio=Math.max(0,v)/100,rbf_rate:v=>RBF.rate=Math.max(0,v)/100,
-    rbf_term:v=>RBF.term=Math.max(1,Math.round(v)),rbf_cactgt:v=>RBF.cacTarget=Math.max(0,v)};
+    rbf_term:v=>RBF.repayShare=Math.max(0,Math.min(100,v))/100,rbf_cactgt:v=>RBF.cacTarget=Math.max(0,v)};
   Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderRBF();});});
   const sel=document.getElementById('rbf_start');
   if(sel)sel.addEventListener('change',()=>{RBF.startMonth=Math.max(0,Math.round(parseFloat(sel.value)||0));renderRBF();});
