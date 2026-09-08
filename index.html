@@ -204,6 +204,9 @@
       <div class="panel"><h2>Plan annuel 5 ans — coût de croissance RBF intégré</h2>
         <div style="overflow-x:auto"><table class="dt" id="rbfTable"></table></div>
         <div class="foot" id="rbffoot"></div></div>
+      <div class="panel"><h2>Trésorerie mois par mois — détail RBF</h2>
+        <p class="csub">Chaque mois : avance reçue (le financeur paie Meta) − principal remboursé par le cash des cohortes financées − intérêts (au mois du 100%) = flux RBF net, puis la trésorerie avec vs sans RBF.</p>
+        <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" id="rbfMonthly"></table></div></div>
     </section>
 
     <section class="tabpane" id="pane-eliott">
@@ -899,19 +902,21 @@ function runRBF(){
   const cum=cohortCumul(A);                              // cash cumulé encaissé par client acquis (mix), t=0..60
   const overlay=new Array(N).fill(0);                   // effet NET du RBF sur la trésorerie, mois par mois
   const rbfCostMo=new Array(N).fill(0);                 // intérêts reconnus AU mois où la cohorte atteint 100%
+  const rbfIn=new Array(N).fill(0);                     // avances reçues (le financeur paie la facture Meta)
+  const rbfPrin=new Array(N).fill(0);                   // principal remboursé au financeur par le cash des cohortes financées
   let totalCost=0, totalFin=0;
   for(let m=startM;m<N;m++){
     const adv=ratio*Ar.meta[m];                         // avance = portion financée du spend du mois m
     if(adv<=0) continue;
     totalFin+=adv;
     const cac_m=cacArr[m]||A.cac, custs=cac_m>0?Ar.meta[m]/cac_m:0;
-    if(m+1<N) overlay[m+1]+=adv;                        // le financeur règle la facture Meta (payée à m+1)
+    if(m+1<N){ overlay[m+1]+=adv; rbfIn[m+1]+=adv; }    // le financeur règle la facture Meta (payée à m+1)
     /* le cash de la cohorte financée sert à rembourser le principal ; il ne revient à la boîte qu'APRÈS le 100% */
     let remain=adv, pb=-1, lim=Math.min(N-m,cum.length);
     for(let t=1;t<lim;t++){
       const incr=(t===1?cum[1]:cum[t]-cum[t-1])*custs;  // cash encaissé par la cohorte ce mois (intro inclus au 1er)
       const take=Math.min(remain,incr);
-      overlay[m+t]-=take;                               // ce cash part au financeur, pas sur le compte
+      overlay[m+t]-=take; rbfPrin[m+t]+=take;           // ce cash part au financeur, pas sur le compte
       remain-=take;
       if(remain<=1e-6){ pb=t; break; }
     }
@@ -923,7 +928,7 @@ function runRBF(){
   }
   const rbfCf=overlay, cashRbf=[]; let c=0;
   for(let m=0;m<N;m++){ c+=overlay[m]; cashRbf.push(R0.cash_end[m]+c); }
-  return {R0,meta:Ar.meta,rbfCf,cashRbf,rbfCostMo,totalCost,totalSpend:totalFin,cacArr,startM};
+  return {R0,meta:Ar.meta,rbfCf,rbfIn,rbfPrin,cashRbf,rbfCostMo,totalCost,totalSpend:totalFin,cacArr,startM};
 }
 let rbfCashObj,rbfSpendObj;
 function renderRBF(){
@@ -973,6 +978,29 @@ function renderRBF(){
     html+=`<td class="${tot<0?'neg':''}"><b>${isInt?fInt(tot):fEur(tot)}</b></td></tr>`;
   }
   document.getElementById('rbfTable').innerHTML=html+'</tbody>';
+  /* Trésorerie mois par mois — détail RBF */
+  const mcols=[
+    ['Mois',m=>R0.months[m],'lab'],
+    ['Spend Meta',m=>-X.meta[m],'neg'],
+    ['Avance RBF',m=>X.rbfIn[m],'pos'],
+    ['− Principal',m=>-X.rbfPrin[m],'neg'],
+    ['− Intérêts',m=>-X.rbfCostMo[m],'neg'],
+    ['Flux RBF net',m=>X.rbfCf[m],'net'],
+    ['Tréso sans RBF',m=>R0.cash_end[m],'cash'],
+    ['Tréso avec RBF',m=>X.cashRbf[m],'cash major'],
+  ];
+  let mh='<thead><tr>'+mcols.map(c=>`<th>${c[0]}</th>`).join('')+'</tr></thead><tbody>';
+  for(let m=0;m<N;m++){
+    const isStart=m===X.startM;
+    mh+=`<tr${isStart?' style="border-top:2px solid #185FA5"':''}>`;
+    for(const [lab,fn,kind] of mcols){
+      if(kind==='lab'){ mh+=`<td>${fn(m)}${isStart?' <span style="color:#185FA5;font-weight:600">▶ début RBF</span>':''}</td>`; continue; }
+      const v=fn(m);
+      mh+=`<td class="${kind.includes('major')?'major ':''}${v<0?'neg':''}">${Math.abs(v)<0.5?'—':fEur(v)}</td>`;
+    }
+    mh+='</tr>';
+  }
+  document.getElementById('rbfMonthly').innerHTML=mh+'</tbody>';
   document.getElementById('rbffoot').innerHTML='Démarrage RBF : <b>'+R0.months[X.startM]+'</b>. Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta financé. Intérêts payés <b>au mois du 100%</b> de chaque cohorte (pic de coût décalé au payback). Le cash des cohortes financées rembourse le principal puis revient à la boîte ; cohortes pré-RBF & legacy 100% à la boîte. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. ⚠ Le « cash final » porte encore le <b>float des avances récentes non encore remboursées</b> (payback au-delà de l\'horizon) : le vrai coût soldé du RBF est le <b>« Coût total RBF »</b> ci-dessus.';
 }
 function syncRbfInputs(){
