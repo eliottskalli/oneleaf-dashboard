@@ -193,7 +193,7 @@
         <div class="b"><label>Durée remboursement (mois)</label><input id="rbf_term" type="number" step="1" value="6"></div>
         <div class="b"><label>CAC au spend cible (€)</label><input id="rbf_cactgt" type="number" step="1" placeholder="constant"></div>
       </div>
-      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b>, <b>à partir du mois de démarrage choisi</b> (avant : Meta payé cash comme aujourd'hui). Le financeur avance le spend financé ; le <b>cash de chaque cohorte financée le rembourse</b> jusqu'à <b>100%</b> (payback), puis revient sur le compte. Les <b>cohortes passées et pré-RBF</b> restent 100% à la boîte. Les <b>intérêts</b> (coût de l'avance) sont payés <b>uniquement au mois où la cohorte atteint 100%</b>. On compare la trésorerie <b>avec</b> et <b>sans</b> RBF sous le même plan de croissance.</p>
+      <p class="note" style="margin:0 0 12px">Finance la croissance <b>Meta</b> par du <b>RBF</b>, <b>à partir du mois de démarrage choisi</b> (avant : Meta payé cash comme aujourd'hui). Le financeur avance le spend financé (il règle ta facture Meta). Tu <b>gardes 100% de ton cash</b> — cohorte financée, cohortes passées et legacy. Tu rembourses le financeur — <b>principal + intérêts en un seul versement</b> — au mois où la cohorte financée atteint <b>100%</b> (payback). Entre les deux, tu détiens l'avance <b>et</b> ton cash qui rentre : la trésorerie grimpe donc bien plus vite. On compare la trésorerie <b>avec</b> et <b>sans</b> RBF sous le même plan de croissance.</p>
       <div class="kpis" id="rbfKpis"></div>
       <div class="panel"><h2>Trésorerie — avec vs sans RBF</h2><p class="csub">Même plan de croissance (montée vers le spend cible). Le RBF lisse la sortie Meta et remonte le point bas ; en régime établi il ne réduit plus le besoin, il le décale et ajoute son coût.</p>
         <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec RBF</span><span><span class="dash" style="border-top-color:#888780"></span>Sans RBF</span></div>
@@ -205,7 +205,7 @@
         <div style="overflow-x:auto"><table class="dt" id="rbfTable"></table></div>
         <div class="foot" id="rbffoot"></div></div>
       <div class="panel"><h2>Trésorerie mois par mois — détail RBF</h2>
-        <p class="csub">Chaque mois : avance reçue (le financeur paie Meta) − principal remboursé par le cash des cohortes financées − intérêts (au mois du 100%) = flux RBF net, puis la trésorerie avec vs sans RBF.</p>
+        <p class="csub">Chaque mois : avance reçue (le financeur paie Meta) − principal & intérêts remboursés en un versement au mois du 100% de la cohorte = flux RBF net. La boîte garde tout son cash entre-temps ; la trésorerie avec vs sans RBF est comparée à droite.</p>
         <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" id="rbfMonthly"></table></div></div>
     </section>
 
@@ -903,32 +903,27 @@ function runRBF(){
   const overlay=new Array(N).fill(0);                   // effet NET du RBF sur la trésorerie, mois par mois
   const rbfCostMo=new Array(N).fill(0);                 // intérêts reconnus AU mois où la cohorte atteint 100%
   const rbfIn=new Array(N).fill(0);                     // avances reçues (le financeur paie la facture Meta)
-  const rbfPrin=new Array(N).fill(0);                   // principal remboursé au financeur par le cash des cohortes financées
-  let totalCost=0, totalFin=0;
+  const rbfPrin=new Array(N).fill(0);                   // principal remboursé au financeur AU mois du 100%
+  let totalCost=0, totalFin=0, outAdv=0, outFee=0;
   for(let m=startM;m<N;m++){
     const adv=ratio*Ar.meta[m];                         // avance = portion financée du spend du mois m
     if(adv<=0) continue;
     totalFin+=adv;
-    const cac_m=cacArr[m]||A.cac, custs=cac_m>0?Ar.meta[m]/cac_m:0;
-    if(m+1<N){ overlay[m+1]+=adv; rbfIn[m+1]+=adv; }    // le financeur règle la facture Meta (payée à m+1)
-    /* le cash de la cohorte financée sert à rembourser le principal ; il ne revient à la boîte qu'APRÈS le 100% */
-    let remain=adv, pb=-1, lim=Math.min(N-m,cum.length);
-    for(let t=1;t<lim;t++){
-      const incr=(t===1?cum[1]:cum[t]-cum[t-1])*custs;  // cash encaissé par la cohorte ce mois (intro inclus au 1er)
-      const take=Math.min(remain,incr);
-      overlay[m+t]-=take; rbfPrin[m+t]+=take;           // ce cash part au financeur, pas sur le compte
-      remain-=take;
-      if(remain<=1e-6){ pb=t; break; }
-    }
-    if(pb<0) pb=lim-1;                                   // 100% pas atteint dans l'horizon : borne
+    const cac_m=cacArr[m]||A.cac;
+    if(m+1<N){ overlay[m+1]+=adv; rbfIn[m+1]+=adv; }    // le financeur règle la facture Meta (payée à m+1) — la boîte GARDE tout son cash
+    /* la boîte encaisse et garde 100% du cash (cohorte financée + cohortes passées + legacy).
+       On rembourse le financeur — principal + intérêts EN UN SEUL VERSEMENT — au mois où la cohorte financée atteint 100% (payback). */
+    const advPerCust=ratio*cac_m;                       // avance rapportée à 1 client acquis
+    let pb=cum.findIndex(v=>v>=advPerCust); if(pb<0) pb=cum.length-1; pb=Math.max(1,pb);
     const fee=adv*rate*term;                             // intérêts = coût total de l'avance
-    const fm=Math.min(m+pb,N-1);
-    overlay[fm]-=fee;                                    // ⚑ intérêts payés UNIQUEMENT au mois du 100%
-    rbfCostMo[fm]+=fee; totalCost+=fee;
+    const fm=m+pb;
+    if(fm<N){ overlay[fm]-=adv; rbfPrin[fm]+=adv;        // remboursement du principal AU 100%
+      overlay[fm]-=fee; rbfCostMo[fm]+=fee; totalCost+=fee; }   // ⚑ intérêts AU 100%
+    else { outAdv+=adv; outFee+=fee; }                  // 100% au-delà de l'horizon : avance encore en cours à la fin
   }
   const rbfCf=overlay, cashRbf=[]; let c=0;
   for(let m=0;m<N;m++){ c+=overlay[m]; cashRbf.push(R0.cash_end[m]+c); }
-  return {R0,meta:Ar.meta,rbfCf,rbfIn,rbfPrin,cashRbf,rbfCostMo,totalCost,totalSpend:totalFin,cacArr,startM};
+  return {R0,meta:Ar.meta,rbfCf,rbfIn,rbfPrin,cashRbf,rbfCostMo,totalCost,totalSpend:totalFin,cacArr,startM,outAdv,outFee};
 }
 let rbfCashObj,rbfSpendObj;
 function renderRBF(){
@@ -1001,7 +996,7 @@ function renderRBF(){
     mh+='</tr>';
   }
   document.getElementById('rbfMonthly').innerHTML=mh+'</tbody>';
-  document.getElementById('rbffoot').innerHTML='Démarrage RBF : <b>'+R0.months[X.startM]+'</b>. Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta financé. Intérêts payés <b>au mois du 100%</b> de chaque cohorte (pic de coût décalé au payback). Le cash des cohortes financées rembourse le principal puis revient à la boîte ; cohortes pré-RBF & legacy 100% à la boîte. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. ⚠ Le « cash final » porte encore le <b>float des avances récentes non encore remboursées</b> (payback au-delà de l\'horizon) : le vrai coût soldé du RBF est le <b>« Coût total RBF »</b> ci-dessus.';
+  document.getElementById('rbffoot').innerHTML='Démarrage RBF : <b>'+R0.months[X.startM]+'</b>. Cout RBF = '+(+(RBF.rate*100).toFixed(2))+' %/mois × '+RBF.term+' mois = <b>'+(RBF.rate*RBF.term*100).toFixed(0)+'% par avance</b>, applique a '+Math.round(RBF.ratio*100)+'% du spend Meta financé. Principal + intérêts remboursés <b>en un versement au mois du 100%</b> de chaque cohorte. La boîte <b>garde 100% de son cash</b> (cohorte financée + passées + legacy) jusque-là. EBITDA operationnel inchange ; le RBF est un cout de financement (sous l\'EBITDA). CAC '+(RBF.cacTarget&&RBF.cacTarget!==A.cac?('module de '+fEur(A.cac)+' a '+fEur(RBF.cacTarget)+' au spend cible'):('constant '+fEur(A.cac)))+'. ⚠ À l\'horizon, <b>'+fEurShort(X.outAdv)+' d\'avances</b> ne sont pas encore remboursées (100% après fin '+R0.months[N-1].slice(0,4)+') : le cash final les porte encore, à solder plus tard (+ '+fEurShort(X.outFee)+' d\'intérêts).';
 }
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
