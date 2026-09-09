@@ -201,7 +201,7 @@
       <div class="panel"><h2>Spend Meta &amp; coût du RBF</h2><p class="csub">Montée du spend vers la cible et coût de financement mensuel (axe de droite)</p>
         <div class="legend"><span><span class="sw" style="background:#378ADD"></span>Spend Meta</span><span><span class="dash" style="border-top-color:#BA7517"></span>Coût RBF mensuel</span></div>
         <div class="chartwrap"><canvas id="rbfSpendChart"></canvas></div></div>
-      <div class="panel"><h2>Plan annuel 5 ans — coût de croissance RBF intégré</h2>
+      <div class="panel"><h2>Plan annuel (jusqu'à fin 2031) — coût de croissance RBF intégré</h2>
         <div style="overflow-x:auto"><table class="dt" id="rbfTable"></table></div>
         <div class="foot" id="rbffoot"></div></div>
       <div class="panel"><h2>Trésorerie mois par mois — détail RBF</h2>
@@ -389,7 +389,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="gPm1WTiSxiIsv2D5vJ3S7Q==.T25yUcSs6lY6BV0o.A91kHltGmjcJ4lNgRf5VaCnLsX9dsWb+r1PwHBcfOBtVZSuF8XDF1yiikLw8DYs1SdWc+ZUUEc3sP2GxSwBBId7+dR2va+f84bMqwdzkxnB20k4cpeItwPfKB6+kksoezp9lEpV8TO2NNXRH9TNEiAb1tet75Oeq6hrveXGUliia47YvH9z6OLR7P/j1KaODRilTRZpeFPu5zylJzkTHz64NkIQMhA9TGiaJ5NM997AtzXZHStDgwDQWO2s47oBs0FD6U380tMfBMGmzN+pHDBHXQk6vhaqO7AZkTgbUe5BJDJwLQZFibart8zKJPtDFsSj33u0KkrWsSBMrbxvoC5gEzpZRIlWe3XvGlWXO4+EVTyJWYLjaxtAakIkVif4fxZrp6tcpWNHrwdINbF6yUGAe0nJFCwOC2ZRit2f2oonv7EgVJ3v+CWHjqEYpwAHvSpCUM3viSGhOYxbKLPMSqr8zJv2Nu+qdPXsoUYVKwNDmvpi4EgHYXRJvyszVX1WMVbwL0VphCElAKFribvKjVBqjTIi/yUDf2ZBlNffV0vFfRK6yfelrgR2HQi3P83pf8oDkdpUTlrA+7sp2LNvMvvAKexXNKuK0luCH0Us4sr8/arctrPCvDFhAnr+V8X+xK/XDRH/oiyHzmGMwAWbkE33SRYJCYK1sfE8A1T4NXG3w1w5xDLNCuvh8O1/gwKTZXzogQR1VMAeFyUohnKcEApxQk1F+6amSlbhd4b5tVXu4upTuH7NucNSJkDXfLjt9eRQQS2Ogrmsh5LN8gTsRqB2ApBs35HY2FzRVDmtCMrnOHwOJXLDdS3Nh3WC01MaP8LblDJ3T5iEx9HKLkF9HQ9nrF3q0tFbvoGmQevHRM5kchB9HcMSKHNpTi59/Jmv4WfSNG7uov5O39C2Kuww3KP0OEKGqfmnFNnYIszeasrP6bM+r4itVmO5JCmB/ESdo/6fZe/gdgr/wUaa4Qa4FWSrdYY+YWvDD94VEoMNy2bLcPsNt4uRdXa+0GAWl2RClEE0Rhl5ftC2YblzJRfeErupc2TCJVtcsmxpiMa6aQbyY6RivoJcOuZNPhZdaSJpRwL7uaLZWIbOo63FCsl0Lufs9gWcjfDvRHhtj/7knzotvcReRiZCJhmOj4h2xwSuaen2BRTZ5uO/v0E0Kmi/SheQbAJ5m71Qg7kcra19e7XbG26ylczDSyR/XFxnEkOY6crsdiJF03YuuYtVD+Ap58vgOB+U2UFddFbzu98EgHoXtgV+1JWKQMylOjT0MxR/5UqDBqbHG5lalNIC7IltkWhz9svhyKLb3XTsNQaRzTA00s9FVOU/GLyuLvAJ1YlqrOfaO2kxKd0u+F1FpZQGn8E1EbH8wBtkWe2yJig0xbwZa8Hh2QBA/kGUaK6vvtrS3y1k7Ryr8O0VVjjUEMN39d97UJg2oD3ei+kP5UTvpJ+esZvrt8JQzfOSfd4iBtgsKYKym9x6Tcl3/H9chZsHjTyWSHDB4HxI1E9lJhp8frCNlfq/uVt+Nctj3X4G7o5OsvN95LXSdsNjorqD3O+iixDPeujuIWPjSm0pk1/yIoe1GxC14ja8aH5d+Zl3pksAnVQCpH1bYef1i6I0OeJHvrGfIIVUI/USJjIXxN3EEsh0YbGYe99XvcJI+48Ux377G6mYL4JaFoH1P6zVDUjxi97aYHxMNvVmAo6G2pzDmB9jA+QsF7lX6kMzJ3DCc7JH6xm5pkHrbbEQQXHpWISZPCSsxq6Kp+W8G0XEBClZzTnjoUV2R60Y0Q8U6bD97vCfUOWikxTyY1c0Mw9SLIllwg6TRsspptq8/ewyzmubCuv6fxt8p0cS0ROFfu1p9BL10yFEhc/99oH9Iba7YDYWCSDgTyTxbott5SjpX1t164Ye3SXnQf45GvK0RLBbnGbSYt/kFr71aM6KRJA3YCLLEWE6jze/7TVsiaNR3+nDdAvGL/1OMCpOf1P3m7kvuzLCZv/F/Ps8qWuLipnZOmtQGSoRvsh8BR4xP207FW+I3FRkq+ashkA4QVxUVaoEWPiTnqOYF/v5nn+WtIEDKHaA1eGJTMfJJtbemyXgX84Lx0F0Yn4i7fo7D/dk7I3YUCYN6AV3lrsfc6lJ76v5udKo2P0uoVQd+MtX9E26yQNhcDVeCAj1mcLcTzoqG9qnfL/wM7Ii53b4VH2ZIEoNt2oR37OF3wQgjzw76Ayh5G45BIPcILrHBPSd1vIoQzFHkDOJLK4Q//AfwMlPtMAR36G4qB+txW6aoRopn06Nh5uW4xkS+M7WggqTOfrKuOY1H4MFOyzpUKQr2ku5fSBWlNJFOrdFvrnfHyFkyfiVrXnVSvJ8A3K0dlTKE0DOFlrcvAQlXG81Z4kE2JH5GPLOLKwLwpD/c4AI16QB3V0wJf/GVcJI2w7nigu9CNmgwL8aM1Tqa/amP6v9KINZRel3/WplZMx2OJSYF0oEsT9pwvFJv3g2IEsvUcA==";
+const HOSTED_DATA="0DkbdxxaD+VLy2vaIKqTAw==.FSrp17l3hDwd+SH7.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -882,14 +882,18 @@ document.getElementById('importFile').onchange=e=>{if(e.target.files[0])importJS
 const RBF={ target:1000000, rampMonths:null, ratio:0.8, rate:0.01, repayShare:0.8, cacTarget:0, startMonth:0 };
 const fEur=v=>(v<0?'-':'')+'€'+Math.abs(Math.round(v)).toLocaleString('fr-FR');
 const fEurShort=v=>{const a=Math.abs(v);let s=a>=1e6?(a/1e6).toFixed(2)+' M€':a>=1e3?Math.round(a/1e3)+' k€':Math.round(a)+' €';return (v<0?'-':'')+s;};
-function rbfMeta(){
-  const N=A.horizon, start=A.meta[0]||270000, target=RBF.target, ramp=Math.max(2,Math.min(RBF.rampMonths||N,N));
+/* horizon dédié au RBF : on étend jusqu'à fin décembre 2031 (sans toucher aux autres onglets) */
+function rbfHorizon(){ const endIdx=(2031-A.startY)*12+(12-A.startM); return Math.max(A.horizon, endIdx+1); }
+function rbfMeta(N){
+  N=N||A.horizon;
+  const start=A.meta[0]||270000, target=RBF.target, ramp=Math.max(2,Math.min(RBF.rampMonths||N,N));
   const m=[];
   for(let i=0;i<N;i++) m.push(i>=ramp-1?target:start+(target-start)*(i/(ramp-1)));
   return m;
 }
 function runRBF(){
-  const Ar=structuredClone(A); Ar.meta=rbfMeta();
+  const rbfN=rbfHorizon();
+  const Ar=structuredClone(A); Ar.horizon=rbfN; Ar.meta=rbfMeta(rbfN);
   const start=A.meta[0]||1, tgt=RBF.target, ct=RBF.cacTarget;
   const cacArr=Ar.meta.map(sp=>{
     if(!ct||ct===A.cac) return A.cac;
@@ -940,10 +944,10 @@ function renderRBF(){
   const lowNo=Math.min(...R0.cash_end), lowNoIdx=R0.cash_end.indexOf(lowNo);
   const lowY=Math.min(...X.cashRbf), lowYIdx=X.cashRbf.indexOf(lowY);
   const cards=[
-    {k:'Spend cible',v:fEurShort(RBF.target)+'/mois',d:'atteint en '+(RBF.rampMonths||A.horizon)+' mois'},
+    {k:'Spend cible',v:fEurShort(RBF.target)+'/mois',d:'atteint en '+(RBF.rampMonths||rbfHorizon())+' mois'},
     {k:'Point bas SANS RBF',v:fEurShort(lowNo),d:R0.months[lowNoIdx],cls:lowNo<0?'neg':'pos'},
     {k:'Point bas AVEC RBF',v:fEurShort(lowY),d:R0.months[lowYIdx],cls:lowY<0?'neg':'pos'},
-    {k:'Cout total RBF (5 ans)',v:fEurShort(X.totalCost),d:(100*X.totalCost/X.totalSpend).toFixed(1)+'% du spend',cls:'neg'},
+    {k:'Cout total RBF (→2031)',v:fEurShort(X.totalCost),d:(100*X.totalCost/X.totalSpend).toFixed(1)+'% du spend',cls:'neg'},
     {k:'Cash final avec RBF',v:fEurShort(X.cashRbf[N-1]),d:R0.months[N-1],cls:X.cashRbf[N-1]<0?'neg':'pos'},
   ];
   document.getElementById('rbfKpis').innerHTML=cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
@@ -973,7 +977,7 @@ function renderRBF(){
     ['Resultat apres RBF',ix=>sum(R0.ebitda,ix)-sum(X.rbfCostMo,ix),'major'],
     ['Cash fin (avec RBF)',ix=>X.cashRbf[ix[ix.length-1]],'cash major'],
   ];
-  let html='<thead><tr><th>€</th>'+yrs.map(y=>`<th>${y}</th>`).join('')+'<th>Total 5 ans</th></tr></thead><tbody>';
+  let html='<thead><tr><th>€</th>'+yrs.map(y=>`<th>${y}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
   for(const [label,fn,kind] of ROWS){
     const isInt=kind.includes('int'), isCash=kind.includes('cash');
     html+=`<tr class="${kind.includes('major')?'major':''}"><td>${label}</td>`;
@@ -1010,9 +1014,9 @@ function renderRBF(){
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
   const sel=g('rbf_start');
-  if(sel){ const N=A.horizon; let o=''; for(let i=0;i<N;i++){ const d=new Date(A.startY,A.startM-1+i,1); o+=`<option value="${i}">${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}</option>`; } sel.innerHTML=o; sel.value=Math.max(0,Math.min(N-1,RBF.startMonth||0)); }
+  if(sel){ const N=rbfHorizon(); let o=''; for(let i=0;i<N;i++){ const d=new Date(A.startY,A.startM-1+i,1); o+=`<option value="${i}">${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}</option>`; } sel.innerHTML=o; sel.value=Math.max(0,Math.min(N-1,RBF.startMonth||0)); }
   g('rbf_target').value=RBF.target;
-  g('rbf_ramp').value=RBF.rampMonths||A.horizon;
+  g('rbf_ramp').value=RBF.rampMonths||rbfHorizon();
   g('rbf_ratio').value=Math.round(RBF.ratio*100);
   g('rbf_rate').value=+(RBF.rate*100).toFixed(2);
   g('rbf_term').value=Math.round((RBF.repayShare!=null?RBF.repayShare:RBF.ratio)*100);
