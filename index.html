@@ -152,6 +152,7 @@
     </section>
 
     <section class="tabpane" id="pane-cash">
+      <div class="bulk" style="margin-bottom:10px"><div class="b"><label>Ligne de caisse — plafond ($)</label><input id="lg_montant" type="number" step="10000"></div><div class="b"><label>Taux ligne (%/an)</label><input id="lg_taux" type="number" step="0.5"></div><span class="note" style="align-self:center">Découvert autorisé : la tréso peut descendre jusqu'à −plafond, intérêts sur le tiré. Mets 0 pour désactiver.</span></div>
       <div class="kpis" id="cashKpis"></div>
       <div class="panel"><h2>Courbe de trésorerie</h2><p class="csub">Solde de cash en fin de mois — avec vs sans prêt BPI</p>
         <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec prêt BPI</span><span><span class="dash" style="border-top-color:#888780"></span>Sans prêt BPI</span></div>
@@ -174,6 +175,7 @@
       </div>
       <div class="panel"><h2>CAC réel par mois</h2>
         <div class="scroll"><table class="grid" id="cacRealTable"></table></div></div>
+      <div class="bulk" style="margin-bottom:10px"><div class="b"><label>Ligne de caisse — plafond ($)</label><input id="lg_montantR" type="number" step="10000"></div><div class="b"><label>Taux ligne (%/an)</label><input id="lg_tauxR" type="number" step="0.5"></div><span class="note" style="align-self:center">Même ligne que l'onglet Trésorerie (partagée). Mets 0 pour désactiver.</span></div>
       <div class="kpis" id="cashKpisR"></div>
       <div class="panel"><h2>Courbe de trésorerie (CAC réel)</h2>
         <div class="chartwrap lg"><canvas id="cashBigR"></canvas></div></div>
@@ -367,6 +369,7 @@ const DEFAULTS={
   startMRR:115000, churnLeg:0.125, arpuOld:24,
   startcash:500000,                       // ⚑ à remplacer
   metaPrior:130000,                       // facture Meta du mois précédent (Mai) payée au 1er mois (Juin) — supprime le "1er mois gratuit"
+  ligneMontant:100000, ligneTaux:0.08,    // ligne de caisse (découvert bancaire) : plafond + taux annuel sur le tiré
   cac:104,                                 // CAC réel
   products:[
     {name:'Weekly',   first:5.19,  monthly:43,    cycle:1,  mix:0.08, churn:0.125},
@@ -390,7 +393,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="VQhzdQOTXeGAP6RfoKdrOg==.bYjdjarRFBusZzX6.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";
+const HOSTED_DATA="KaY9pJsCHQUo2pHhQDcIOg==.8nrdtEDPIRPHaq1C.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -737,43 +740,43 @@ function renderPnl(){
 }
 
 function renderTreasury(){
-  const N=R.months.length, minCash=Math.min(...R.cash_end), minIdx=R.cash_end.indexOf(minCash), runwayIdx=R.cash_end.findIndex(v=>v<0);
-  const cards=[
-    {k:'Trésorerie de départ',v:fShort(A.startcash),d:R.months[0]},
-    {k:'Point bas',v:fShort(minCash),d:R.months[minIdx],cls:minCash<0?'neg':'pos'},
-    {k:'Trésorerie finale',v:fShort(R.cash_end[N-1]),d:R.months[N-1]},
-    {k:'Runway',v:runwayIdx<0?'> horizon':(runwayIdx+1)+' mois',d:runwayIdx<0?'cash jamais négatif':'négatif en '+R.months[runwayIdx],cls:runwayIdx<0?'pos':'neg'},
-    {k:'Cash net généré',v:fShort(R.cash_end[N-1]-A.startcash),d:'sur '+N+' mois',cls:(R.cash_end[N-1]-A.startcash)>=0?'pos':'neg'},
-  ];
-  document.getElementById('cashKpis').innerHTML=cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
-  if(typeof Chart!=='undefined'){cashBig&&cashBig.destroy();
-    cashBig=new Chart(document.getElementById('cashBig'),{type:'line',data:{labels:R.months,datasets:[
-      {label:'Trésorerie (avec BPI)',data:R.cash_end,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,
-        segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
-      {label:'Sans prêt BPI',data:R.cash_nobpi,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
-      options:{...opts(fShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}});}
-  let h='<thead><tr><th>Mois</th><th>CA encaissé</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
-  for(let i=0;i<N;i++)h+=`<tr><td>${R.months[i]}</td><td>${fUSD(R.cash_rev[i])}</td><td class="${R.ebitda[i]<0?'neg':''}">${fUSD(R.ebitda[i])}</td><td class="neg">${fUSD(R.capex[i])}</td><td class="${R.bpi_cf[i]<0?'neg':''}" style="${R.bpi_cf[i]>0?'color:#0F6E56;font-weight:500':''}">${R.bpi_cf[i]?fUSD(R.bpi_cf[i]):'—'}</td><td class="${R.net_cf[i]<0?'neg':''}">${fUSD(R.net_cf[i])}</td><td class="${R.cash_end[i]<0?'neg':''}"><b>${fUSD(R.cash_end[i])}</b></td></tr>`;
-  document.getElementById('cashTable').innerHTML=h+'</tbody>';
-  /* décomposition détaillée des flux de banque (virement Meta à 30 j explicite) */
-  let dh='<thead><tr><th>Mois</th><th>Cash début</th><th>+ CA encaissé</th><th>− COGS</th><th>− Salaires</th><th>− Logiciels</th><th>− G&A</th><th>− Compta</th><th>− Sales tax</th><th>− Capex</th><th>− Remb. BPI</th><th>Cash avant Meta</th><th>− Meta payé (M-1)</th><th>= Cash fin</th></tr></thead><tbody>';
-  const cell=v=>`<td class="${v<0?'neg':''}">${v?fUSD(v):'—'}</td>`;
-  for(let i=0;i<N;i++){
-    const metaCash=R.meta[i]+R.timing[i];          // = −(dépense Meta de M-1) ; 0 au 1er mois
-    const cashAvantMeta=R.cash_end[i]-metaCash;     // solde juste avant le virement Meta
-    dh+=`<tr><td>${R.months[i]}</td>`
-      +`<td><b>${fUSD(R.cash_beg[i])}</b></td>`
-      +`<td style="color:#0F6E56">${fUSD(R.cash_rev[i])}</td>`
-      +cell(R.total_cogs[i])+cell(R.salaries[i])+cell(R.software[i])+cell(R.ga[i])+cell(R.accounting[i])+cell(R.salestax[i])+cell(R.capex[i])+cell(R.bpi_cf[i])
-      +`<td class="${cashAvantMeta<0?'neg':''}">${fUSD(cashAvantMeta)}</td>`
-      +cell(metaCash)
-      +`<td class="${R.cash_end[i]<0?'neg':''}"><b>${fUSD(R.cash_end[i])}</b></td></tr>`;
-  }
-  document.getElementById('cashDecomp').innerHTML=dh+'</tbody>';
+  const Rx=applyLigne(R);
+  document.getElementById('cashKpis').innerHTML=tresKpiHTML(Rx)+ligneKpiHTML(Rx);
+  if(typeof Chart!=='undefined'){cashBig&&cashBig.destroy(); cashBig=new Chart(document.getElementById('cashBig'),tresChartCfg(Rx));}
+  document.getElementById('cashTable').innerHTML=tresDetailHTML(Rx);
+  document.getElementById('cashDecomp').innerHTML=tresDecompHTML(Rx);
+  syncLigneInputs();
 }
 
 /* ===== Onglet « Trésorerie réelle » : même décompte, mais CAC réel saisi par mois ===== */
 let cashBigR;
+/* ligne de caisse : découvert renouvelable, plafond A.ligneMontant, intérêts A.ligneTaux/an sur le tiré.
+   Effet : intérêts sur la partie négative du solde (plafonnée), qui tirent la courbe un peu plus bas. Le solde PEUT passer sous −plafond (part non couverte). */
+function applyLigne(Rx){
+  const cap=A.ligneMontant||0, r=(A.ligneTaux||0)/12; if(cap<=0) return Rx;
+  const N=Rx.net_cf.length, cash=[],drawn=[],intr=[],ncf2=[]; let prev=A.startcash;
+  for(let m=0;m<N;m++){
+    const drawnPrev=Math.min(cap,Math.max(0,-prev));   // découvert tiré sur le solde du mois précédent
+    const interest=drawnPrev*r;                         // intérêts sur le tiré uniquement
+    const net=Rx.net_cf[m]-interest, end=prev+net; prev=end;
+    cash.push(end); ncf2.push(net); intr.push(interest); drawn.push(Math.min(cap,Math.max(0,-end)));
+  }
+  return Object.assign({},Rx,{cash_end:cash,net_cf:ncf2,ligne_drawn:drawn,ligne_int:intr});
+}
+function ligneKpiHTML(Rx){
+  const cap=A.ligneMontant||0; if(cap<=0) return '';
+  const mc=Math.min(...Rx.cash_end), maxDrawn=Math.min(cap,Math.max(0,-mc)), reste=Math.max(0,-mc-cap);
+  const totInt=(Rx.ligne_int||[]).reduce((a,b)=>a+b,0);
+  const cards=[
+    {k:'Ligne de caisse',v:fShort(cap),d:(+(A.ligneTaux*100).toFixed(1))+'%/an'},
+    {k:'Découvert max utilisé',v:fShort(maxDrawn),d:'au point bas',cls:'neg'},
+    {k:'Reste à financer au creux',v:reste>0?fShort(reste):'0 — couvert ✓',d:reste>0?'la ligne ne suffit pas seule':'la ligne absorbe le trou',cls:reste>0?'neg':'pos'},
+    {k:'Intérêts ligne (total)',v:fShort(totInt),d:'sur le tiré, '+Rx.months.length+' mois',cls:'neg'},
+  ];
+  return cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+}
+function syncLigneInputs(){const s=(id,v)=>{const e=document.getElementById(id);if(e&&document.activeElement!==e)e.value=v;};
+  s('lg_montant',A.ligneMontant); s('lg_taux',+(A.ligneTaux*100).toFixed(2)); s('lg_montantR',A.ligneMontant); s('lg_tauxR',+(A.ligneTaux*100).toFixed(2));}
 function tresKpiHTML(Rx){
   const N=Rx.months.length, mc=Math.min(...Rx.cash_end), mi=Rx.cash_end.indexOf(mc), rw=Rx.cash_end.findIndex(v=>v<0);
   const cards=[
@@ -785,9 +788,11 @@ function tresKpiHTML(Rx){
   ];
   return cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
 }
-function tresChartCfg(Rx){return {type:'line',data:{labels:Rx.months,datasets:[
+function tresChartCfg(Rx){const cap=A.ligneMontant||0; const ds=[
     {label:'Trésorerie (avec BPI)',data:Rx.cash_end,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
-    {label:'Sans prêt BPI',data:Rx.cash_nobpi,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
+    {label:'Sans prêt BPI',data:Rx.cash_nobpi,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}];
+  if(cap>0) ds.push({label:'Plafond ligne de caisse',data:Rx.months.map(()=>-cap),borderColor:'#BA7517',borderDash:[3,3],borderWidth:1.5,pointRadius:0,fill:false});
+  return {type:'line',data:{labels:Rx.months,datasets:ds},
     options:{...opts(fShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}};}
 function tresDetailHTML(Rx){
   let h='<thead><tr><th>Mois</th><th>CA encaissé</th><th>EBITDA</th><th>Capex</th><th>Prêt BPI</th><th>Net CF</th><th>Cash fin</th></tr></thead><tbody>';
@@ -834,13 +839,19 @@ function refreshCashRealOutputs(){
   A.metaReal=A.metaReal||[];
   const Areal=structuredClone(A);                 // trésorerie RÉELLE : dépense Meta réelle là où saisie, sinon budget
   for(let m=0;m<Areal.horizon;m++){ if((A.metaReal[m]||0)>0) Areal.meta[m]=A.metaReal[m]; }
-  const R2=runModel(Areal,{cacArr:A.cacReal});
-  document.getElementById('cashKpisR').innerHTML=tresKpiHTML(R2);
+  const R2=applyLigne(runModel(Areal,{cacArr:A.cacReal}));
+  document.getElementById('cashKpisR').innerHTML=tresKpiHTML(R2)+ligneKpiHTML(R2);
   if(typeof Chart!=='undefined'){cashBigR&&cashBigR.destroy(); cashBigR=new Chart(document.getElementById('cashBigR'),tresChartCfg(R2));}
   document.getElementById('cashTableR').innerHTML=tresDetailHTML(R2);
   document.getElementById('cashDecompR').innerHTML=tresDecompHTML(R2);
+  syncLigneInputs();
 }
 function renderCashReal(){ buildCacRealTable(); refreshCashRealOutputs(); }
+(function wireLigneInputs(){
+  const upd=()=>{ try{renderTreasury();}catch(e){} try{refreshCashRealOutputs();}catch(e){} saveState('auto'); };
+  [['lg_montant','lg_montantR']].flat().forEach(id=>{const e=document.getElementById(id); if(e)e.addEventListener('input',()=>{A.ligneMontant=Math.max(0,parseFloat(e.value)||0); upd();});});
+  [['lg_taux','lg_tauxR']].flat().forEach(id=>{const e=document.getElementById(id); if(e)e.addEventListener('input',()=>{A.ligneTaux=Math.max(0,parseFloat(e.value)||0)/100; upd();});});
+})();
 document.getElementById('bk_cacreal_apply').onclick=()=>{const v=parseFloat(document.getElementById('bk_cacreal').value)||0; if(v<=0){alert('Entre un CAC supérieur à 0.');return;} A.cacReal=[]; for(let m=0;m<A.horizon;m++)A.cacReal[m]=v; renderCashReal(); saveState('manuel');};
 document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCashReal(); saveState('manuel');};
 
