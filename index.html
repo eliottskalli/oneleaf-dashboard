@@ -390,7 +390,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="b8hX1KaBOE6IFpuzC9JZ9w==./ggDlmGc2w8zi9hV.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";
+const HOSTED_DATA="VQhzdQOTXeGAP6RfoKdrOg==.bYjdjarRFBusZzX6.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -806,23 +806,35 @@ function tresDecompHTML(Rx){
   return dh+'</tbody>';
 }
 function buildCacRealTable(){
-  A.cacReal=A.cacReal||[];
+  A.cacReal=A.cacReal||[]; A.metaReal=A.metaReal||[];
+  if(A.metaReal.every(v=>!v)){ A.metaReal[0]=128000; A.metaReal[1]=239000; A.metaReal[2]=226000; A.cacReal[0]=97.76; A.cacReal[1]=77; A.cacReal[2]=85.02; }  // réels juin/juil/août (juin = mois partiel, démarrage le 10)
   const hint=document.getElementById('cacrealHint'); if(hint)hint.textContent=fUSD(A.cac);
   const N=A.horizon, start=new Date(A.startY,A.startM-1,1);
-  let h='<thead><tr><th>Mois</th><th>Budget Meta ($)</th><th>CAC réel ($)</th><th>Clients acquis</th></tr></thead><tbody>';
+  let h='<thead><tr><th>Mois</th><th>Dépense Meta réelle ($)</th><th>CAC réel ($)</th><th>Clients acquis</th></tr></thead><tbody>';
   for(let m=0;m<N;m++){
     const d=new Date(start.getFullYear(),start.getMonth()+m,1);
     const lbl=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    const cv=A.cacReal[m]>0?A.cacReal[m]:0, cacM=cv>0?cv:A.cac, nc=cacM>0?(A.meta[m]||0)/cacM:0;
-    h+=`<tr><td>${lbl}</td><td class="calc">${fInt(A.meta[m]||0)}</td><td><input type="number" step="1" data-cm="${m}" value="${cv>0?cv:''}" placeholder="${A.cac}"></td><td class="calc" id="ncr-${m}">${fInt(nc)}</td></tr>`;
+    const mr=A.metaReal[m]>0?A.metaReal[m]:0, sp=mr>0?mr:(A.meta[m]||0);
+    const cv=A.cacReal[m]>0?A.cacReal[m]:0, cacM=cv>0?cv:A.cac, nc=cacM>0?sp/cacM:0;
+    h+=`<tr><td>${lbl}</td>`
+      +`<td><input type="number" step="1000" data-mr="${m}" value="${mr>0?mr:''}" placeholder="${fInt(A.meta[m]||0)}"></td>`
+      +`<td><input type="number" step="1" data-cm="${m}" value="${cv>0?cv:''}" placeholder="${A.cac}"></td>`
+      +`<td class="calc" id="ncr-${m}">${fInt(nc)}</td></tr>`;
   }
   const t=document.getElementById('cacRealTable'); t.innerHTML=h+'</tbody>';
-  t.oninput=e=>{const el=e.target; if(el.dataset.cm===undefined)return; const m=+el.dataset.cm; A.cacReal[m]=parseFloat(el.value)||0;
-    const cacM=A.cacReal[m]>0?A.cacReal[m]:A.cac, c2=document.getElementById('ncr-'+m); if(c2)c2.textContent=fInt(cacM>0?(A.meta[m]||0)/cacM:0);
+  t.oninput=e=>{const el=e.target;
+    if(el.dataset.mr!==undefined){ A.metaReal[+el.dataset.mr]=parseFloat(el.value)||0; }
+    else if(el.dataset.cm!==undefined){ A.cacReal[+el.dataset.cm]=parseFloat(el.value)||0; }
+    else return;
+    const m=+(el.dataset.mr!==undefined?el.dataset.mr:el.dataset.cm);
+    const sp=A.metaReal[m]>0?A.metaReal[m]:(A.meta[m]||0), cacM=A.cacReal[m]>0?A.cacReal[m]:A.cac, c2=document.getElementById('ncr-'+m); if(c2)c2.textContent=fInt(cacM>0?sp/cacM:0);
     clearTimeout(debounce); debounce=setTimeout(()=>{saveState('auto');refreshCashRealOutputs();},220);};
 }
 function refreshCashRealOutputs(){
-  const R2=runModel(A,{cacArr:A.cacReal});
+  A.metaReal=A.metaReal||[];
+  const Areal=structuredClone(A);                 // trésorerie RÉELLE : dépense Meta réelle là où saisie, sinon budget
+  for(let m=0;m<Areal.horizon;m++){ if((A.metaReal[m]||0)>0) Areal.meta[m]=A.metaReal[m]; }
+  const R2=runModel(Areal,{cacArr:A.cacReal});
   document.getElementById('cashKpisR').innerHTML=tresKpiHTML(R2);
   if(typeof Chart!=='undefined'){cashBigR&&cashBigR.destroy(); cashBigR=new Chart(document.getElementById('cashBigR'),tresChartCfg(R2));}
   document.getElementById('cashTableR').innerHTML=tresDetailHTML(R2);
@@ -1093,7 +1105,7 @@ function cohortCumul(A){
 function paybackAt(cum,cac){ for(let m=0;m<cum.length;m++){ if(cum[m]>=cac) return m; } return Infinity; }
 function buildDrTable(){
   A.metaReal=A.metaReal||[]; A.cacReal=A.cacReal||[];
-  if(A.metaReal.every(v=>!v)){ A.metaReal[0]=140000; A.metaReal[1]=270000; A.metaReal[2]=254000; }  // pré-remplissage : tes réels juin/juil/août
+  if(A.metaReal.every(v=>!v)){ A.metaReal[0]=128000; A.metaReal[1]=239000; A.metaReal[2]=226000; A.cacReal[0]=97.76; A.cacReal[1]=77; A.cacReal[2]=85.02; }  // pré-remplissage : tes réels juin/juil/août
   const N=A.horizon, start=new Date(A.startY,A.startM-1,1), e=unitEcon(A), cum=cohortCumul(A);
   const lt=document.getElementById('dr_ltv'); if(lt)lt.textContent=fUSD(e.ltv);
   let h='<thead><tr><th>Mois</th><th>Dépense Meta réelle ($)</th><th>CAC réel ($)</th><th>Clients acquis</th><th>LTV/CAC</th><th>ROAS J0</th><th>Payback (mois)</th></tr></thead><tbody>';
