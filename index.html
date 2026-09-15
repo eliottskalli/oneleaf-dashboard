@@ -228,6 +228,9 @@
       <div class="panel"><h2>Compte de résultat — 5 ans (RBF TP intégré)</h2>
         <div style="overflow-x:auto"><table class="dt" id="rbftpPnl"></table></div>
         <div class="foot" id="rbftpfoot"></div></div>
+      <div class="panel"><h2>Trésorerie mois par mois — détail RBF TP</h2>
+        <p class="csub">Chaque mois : avance (100% du spend, à M+1) − principal prélevé sur le CA − intérêts (au 100% Net ROAS) = flux net, puis la trésorerie avec vs sans.</p>
+        <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" id="rbftpMonthly"></table></div></div>
     </section>
 
     <section class="tabpane" id="pane-eliott">
@@ -412,7 +415,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="KUPKlR6p8JPQEL9CxXGXuA==.TUCceykCu886pMvj.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";
+const HOSTED_DATA="ti6bS3X7UXO/1eY3R/lZwg==.8tevtp5VUmqko39s.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -1123,6 +1126,24 @@ function renderRBFTP(){
   }
   document.getElementById('rbftpPnl').innerHTML=html+'</tbody>';
   document.getElementById('rbftpfoot').innerHTML='Financement <b>100% du spend</b>, même prix que PvX ('+(+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2))+'% + '+(+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2))+'%/mois). Tu n\'avances rien sur le Meta ; le financeur prélève 100% du CA des cohortes financées jusqu\'au remboursement. EBITDA opérationnel inchangé ; le coût RBF est un coût de financement (sous l\'EBITDA). Spend & CAC réels intégrés (juin/juil/août).';
+  /* Trésorerie mois par mois — détail RBF TP */
+  const mcols=[
+    ['Mois',m=>R0.months[m],'lab'],['Spend Meta',m=>-X.meta[m],'neg'],['Avance RBF TP',m=>X.rbfIn[m],'pos'],
+    ['− Principal',m=>-X.rbfPrin[m],'neg'],['− Intérêts',m=>-X.rbfCostMo[m],'neg'],['Flux net',m=>X.rbfCf[m],'net'],
+    ['Tréso sans',m=>R0.cash_end[m],'cash'],['Tréso avec',m=>X.cashRbf[m],'cash major'],
+  ];
+  let mh='<thead><tr>'+mcols.map(c=>`<th>${c[0]}</th>`).join('')+'</tr></thead><tbody>';
+  for(let m=0;m<N;m++){
+    const isStart=m===X.startM;
+    mh+=`<tr${isStart?' style="border-top:2px solid #185FA5"':''}>`;
+    for(const [lab,fn,kind] of mcols){
+      if(kind==='lab'){ mh+=`<td>${fn(m)}${isStart?' <span style="color:#185FA5;font-weight:600">▶ début RBF</span>':''}</td>`; continue; }
+      const v=fn(m);
+      mh+=`<td class="${kind.includes('major')?'major ':''}${v<0?'neg':''}">${Math.abs(v)<0.5?'—':fEur(v)}</td>`;
+    }
+    mh+='</tr>';
+  }
+  document.getElementById('rbftpMonthly').innerHTML=mh+'</tbody>';
 }
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
