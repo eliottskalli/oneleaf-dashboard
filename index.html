@@ -217,6 +217,15 @@
     </section>
 
     <section class="tabpane" id="pane-rbftp">
+      <div class="bulk" style="flex-wrap:wrap">
+        <div class="b"><label>Mois de démarrage</label><select id="rbftp_start"></select></div>
+        <div class="b"><label>Spend cible (€/mois)</label><input id="rbftp_target" type="number" step="10000"></div>
+        <div class="b"><label>Mois pour atteindre la cible</label><input id="rbftp_ramp" type="number" step="1"></div>
+        <div class="b"><label>% du spend financé</label><input id="rbftp_ratio" type="number" value="100" disabled style="opacity:.6"></div>
+        <div class="b"><label>Intérêt — base (%)</label><input id="rbftp_feebase" type="number" step="0.05"></div>
+        <div class="b"><label>+ % par mois de payback</label><input id="rbftp_feeperm" type="number" step="0.05"></div>
+        <div class="b"><label>CAC au spend cible (€)</label><input id="rbftp_cactgt" type="number" step="1" placeholder="constant"></div>
+      </div>
       <p class="note" style="margin:0 0 12px">Deuxième offre — <b>financement 100% du spend</b> (au lieu de 80%), <b>même prix</b> que PvX (1,90% + 0,75%/mois de payback, intérêt au 100% Net ROAS). Le financeur avance <b>100% du Meta</b> et prélève <b>100% du CA net</b> de chaque cohorte financée jusqu'au remboursement. Tu n'avances <b>rien</b> de ta poche sur le Meta.</p>
       <div class="kpis" id="rbftpKpis"></div>
       <div class="panel"><h2>Trésorerie — avec vs sans RBF TP</h2><p class="csub">Financement 100% du spend, même plan de croissance</p>
@@ -415,7 +424,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="ti6bS3X7UXO/1eY3R/lZwg==.8tevtp5VUmqko39s.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";
+const HOSTED_DATA="h+K3athk9Z3q3D+SfzakkA==.6r40Tl20grI/BPsG.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -1144,7 +1153,26 @@ function renderRBFTP(){
     mh+='</tr>';
   }
   document.getElementById('rbftpMonthly').innerHTML=mh+'</tbody>';
+  syncRbftpInputs();
 }
+/* filtres RBF TP : pilotent les mêmes paramètres partagés que RBF (spend, prix, démarrage) ; seul le financement est fixé à 100% */
+function syncRbftpInputs(){
+  const g=id=>document.getElementById(id); if(!g('rbftp_target'))return;
+  const sel=g('rbftp_start');
+  if(sel){ const N=rbfHorizon(); let o=''; for(let i=0;i<N;i++){ const d=new Date(A.startY,A.startM-1+i,1); o+=`<option value="${i}">${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}</option>`; } sel.innerHTML=o; sel.value=Math.max(0,Math.min(N-1,RBF.startMonth||0)); }
+  g('rbftp_target').value=RBF.target;
+  g('rbftp_ramp').value=RBF.rampMonths||rbfHorizon();
+  g('rbftp_feebase').value=+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2);
+  g('rbftp_feeperm').value=+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2);
+  g('rbftp_cactgt').value=RBF.cacTarget||'';
+}
+(function wireRbftpInputs(){
+  const map={rbftp_target:v=>RBF.target=Math.max(0,v),rbftp_ramp:v=>RBF.rampMonths=Math.max(2,Math.round(v)),
+    rbftp_feebase:v=>RBF.feeBase=Math.max(0,v)/100,rbftp_feeperm:v=>RBF.feePerMonth=Math.max(0,v)/100,rbftp_cactgt:v=>RBF.cacTarget=Math.max(0,v)};
+  Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{map[id](parseFloat(el.value)||0);renderRBFTP();});});
+  const sel=document.getElementById('rbftp_start');
+  if(sel)sel.addEventListener('change',()=>{RBF.startMonth=Math.max(0,Math.round(parseFloat(sel.value)||0));renderRBFTP();});
+})();
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
   const sel=g('rbf_start');
