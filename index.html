@@ -108,6 +108,7 @@
     <button data-tab="cash">Trésorerie</button>
     <button data-tab="cashreal">Trésorerie réelle</button>
     <button data-tab="rbf">RBF Oneleaf</button>
+    <button data-tab="rbftp">RBF TP (100%)</button>
     <button data-tab="eliott">Prêt Eliott</button>
     <button data-tab="datareel">Data réel</button>
   </div>
@@ -213,6 +214,20 @@
       <div class="panel"><h2>Trésorerie mois par mois — détail RBF</h2>
         <p class="csub">Chaque mois : avance PvX (80% du spend, à M+1) − principal prélevé sur le CA de la cohorte (80% du CA, dès M+2) − intérêts (en une fois, au recouvrement à 100%) = flux PvX net, puis la trésorerie avec vs sans PvX.</p>
         <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" id="rbfMonthly"></table></div></div>
+    </section>
+
+    <section class="tabpane" id="pane-rbftp">
+      <p class="note" style="margin:0 0 12px">Deuxième offre — <b>financement 100% du spend</b> (au lieu de 80%), <b>même prix</b> que PvX (1,90% + 0,75%/mois de payback, intérêt au 100% Net ROAS). Le financeur avance <b>100% du Meta</b> et prélève <b>100% du CA net</b> de chaque cohorte financée jusqu'au remboursement. Tu n'avances <b>rien</b> de ta poche sur le Meta.</p>
+      <div class="kpis" id="rbftpKpis"></div>
+      <div class="panel"><h2>Trésorerie — avec vs sans RBF TP</h2><p class="csub">Financement 100% du spend, même plan de croissance</p>
+        <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec RBF TP</span><span><span class="dash" style="border-top-color:#888780"></span>Sans</span></div>
+        <div class="chartwrap lg"><canvas id="rbftpCashChart"></canvas></div></div>
+      <div class="panel"><h2>MRR &amp; ARR</h2><p class="csub">Croissance du récurrent sous ce plan</p>
+        <div class="legend"><span><span class="sw" style="background:#7F77DD"></span>MRR base</span><span><span class="sw" style="background:#1D9E75"></span>MRR acquis</span><span><span class="dash" style="border-top-color:#BA7517"></span>ARR (axe droit)</span></div>
+        <div class="chartwrap lg"><canvas id="rbftpMrrChart"></canvas></div></div>
+      <div class="panel"><h2>Compte de résultat — 5 ans (RBF TP intégré)</h2>
+        <div style="overflow-x:auto"><table class="dt" id="rbftpPnl"></table></div>
+        <div class="foot" id="rbftpfoot"></div></div>
     </section>
 
     <section class="tabpane" id="pane-eliott">
@@ -397,7 +412,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="BvlHkGQGPyZSJkxEFwgSUA==.gebTAQUfDniir8Nb.wzRwAKHTjPeIU1Xfc60CEJ/fX3sV+LdzGBekY+qt4De/8aGYNfSCZnk6vSMkiAgH6tH7sFO9K36BsICeyuX4saZQyUfDdLvsqQDDDkBqZoQ+B1Cj6QeKFkpaGbnkQ2zu7Z3n3umhzR/Vsd1BAdoMzvvi8SPegOVzt6U9Oz0G6cjBV5jMMZZ00IBr6TMr+9P30PM9+qLe+y7KgfQnr6IRgVRmhYMpMDEhT+GoHzQm0f5Gr59DrbtbqJNGSB7QuWGsEhex0XCt/xekMStZslgwKPvW8Lwhlwjsi29qtzVlTZICFMs7K+H+VNop0OGrOTt15jSmPvbXFDYWhWy3eya7GmOVhOjvhaBH1m/kFDFEh0TmgEV6I3IlTasP+WedNdWc+ubfTrKy/+jIWUweKNr5e+SdV4MZJc0A7OeOWeSzXE5WVM/wjG20LrqQVofZWCbmDhWq6r3jpQtXQhfLF8x+0eF9WtpQQ3Oj+lRu5Jzn8udS/pKa3C6rQXUKWiBupOxTLV6ZoDMIuPCckxLLqGkf4knaiMtLLMIcS14KpIiyMMOJafrCAFWRiOwApau3P/XS5epjh7fDt2eyWGXmVKyySx2SeIpU+GxIKVJ4GnJxUaV7HyJZWtv22PBfDCLnlfVz7lfcpyoC8P907mmeSAV/wGupDmkOmpULHt1xEgsq5RG8PyF/Of6jwwTAYVyqXCCe26iXTccMVZeCfb3LLAWOOW8n6Jkbf+cc5UZRhiFkT/pvZ64wGuQn175r9S9kbfYEFLYtwQycVMhUP1Zb0xaG9dDXtFyOdmLMQnoFTVJmBr8rMhCbDz9tpiz2xgp3qmepSYwUgXcwrorQqCFLpYXUnG7qiJRGTZWeFJiUXadjq7v26+XWdQGHUO5f6ck6vZRJsAWtiPhsV0SBLzfysnkDkTFZCG2TRaXSGCqpRT2Iy4JljmrxZqozcZFtmjyseCE2kijNM84WT8FkGRzvMbCp5nSsOMScNzcRtCWZ2ygEE+Rvr6r6XFjJ5cjEzsFo4rVH1jjpwAzfvJTtfh3U7qp2zC2JknEmb74etnfREbnqiRMKfCt8RHNUY8FI9LCHlyavRIbWHdQKh7RK4h7hFw6u6zfpvSPeGLebYDZe4VXtlArPQ8bTvwq4c+eERpm8F8+jgotW0jVVfNTWJ4OOCD1QqBdcDS5/Hk4rOtWifTN+kW0XuNvJTXiyEBq7ULAa67Gpjev96sdsgxmrjHetNcTEZJEA5d7jQTB0Z16SMtax5kJtiHHWmf+6r8Xsvmry34grRcjIlfCS+S2BHiUyLNy88lZgIbK+DOlhNc4P4YCEABdI56r3YBBYeRA5Q2btlq5YFpy2VlV+hMhSpppIcDVB/JHPdKEG513HqF7+41k2x0US6P0VFYD1lXRIn4BmpyUpAAS8LBxKF3x8+KRAw1hE1DFo2ZGfVN3GSTsXbG4DrftHySeJ6FWHATsOn5887ERZBn+w7ShuZ5+CvU5Xbj18OoIDffnNcKYC5iN1ymTBAQfN76kJmbAg0GGRYxXs01dZPl1swAnqO7XgyFo9XQi9LGgLpWyJL4dLOWD2R1uv2Fhw6dZRNeo5XkZhb8sGjXsgRGUAjOAtEMRMcFbk55m11rw5AF3EtpLS3k5Rq4wCSqYWK70Ts/CmyKUv08Ekp7a+f2yPYMw8n/A1dV8SKNnRnI4z7ft72bcVZBL2tbzRYIkMZpPG6SrUGKdIOrVri/5Escvd1sEEj5/XgZVK02/gzDyr1yPmiyhs/1mTWiOnvXLxVBGPGB1h8rSi2MDX93zkjVbxLWpQ0f3tqT6/QbMWtTeruO/sDqA/Jui6FVo5ZJBpR2ZQcLqBKKwIIr09lnfeFRo4P+jSzbKZsOO0qug8QZHr5viN8fk6tKlRIRCptA9+lRU2ExJcRWJbv2dUSj3tsnXWWpWO2HXzio42wkKGqexBjEqt03QaSmh4sq5FXx11jfSmiduiD5TRaoUfofTJXOlJkx5yfk0gh8FIupsNkpS5CHptrEtveRmGjNXiXhzJqHq8fZbR2uxiF5N1YkvZxXYxjhcwj+vn9tTZSgKZGCsN2UIVUk6bsWf4J+x5QMU6jppSttvc1eaPl/+2sitpMDLx7cIDtPgNiyelePqzTqvjMYDl+eaXkRw1odqfKt8r946RMDwp07ZJxnIPDNYSDG+0/EdUy7LbqrpugNw6ufwODyIZeK5VppU+Vnrf+uPJyyCfojK6Aev8azM1sGrtK73zwoFDdHAnOkS8RkTj+8e+PiqZiercJ0m5EldUCBx7FeZ+vqWD7K04Q5FlphyVH88F1Le5/W7H+M2G4h8BjWJ2YcFDCAQyLL6KXb1WYDal0U7CYfqmD8pOOJFtTWV9hoFVMasAZTmMbjtfYS7CBQDDLCHWDmIaQsAFuwVUjHO7fj41lkLFw0zRJwIskSLUX7oVGzWb1SZ6yfy/Y9JgfRZQJJovFKPbuL4se/VcPqYACkPlPuZ9MyMWYzPsdakfWzx/cAFQP2uklT8XrpGXpaHN969vqWXA7/0jAtks6kKklqnEgk8j/TV8WDxpnIKZfvDk/XaxckdLBWdyeSbY5FVl2ZmvmU33x46s/Rt1U7wBqd/mbvIhA3UqEzQG";
+const HOSTED_DATA="KUPKlR6p8JPQEL9CxXGXuA==.TUCceykCu886pMvj.JwXJqZXfeF1GJBuwK+rKQlsg4NRIeVDWtrG6dV0q8mEvx3FMM0hHVs6erJiOH5cxlQpFwvaHsrPW51QEz4kCTurybz4iVBLsLYGRbQEndCFPuNRQariu4OQmUJKkXJUASzU1SyGg/gYtPsULLLLsRZg8op6jbAfUB/NQVHrevZlgRiUlwCqOKAu/w4VI/DSC70JvoanD6J0WQ0cBy92PHi8/G8bGQ4wwq4mXcMhORPakZXyu326AbcSKC5S6nJROm9zgGJQZSQJO3Zv89gGjYa81vmUW+aCfQZiQVxYLFcMH9ZKFNy31p2MmJwVeX0i5haIfFrIp+j4dZEL+7bfUoM2dFi1WaBdXJiDXwjzi2XyQZQdKZkEsKoLWt0kb6+Ve2tj0JMmsCVl+VpAos9SfnRL9VaycEENRxWUOZw84bmdrxg8zMHe5iRqmbpcfpjnk2a7RCacsivgyVOfBWPB9OVn0nHo0fS8QFcGrCY26XYP7Ow6pA/xhTNq1U8U/98rvIdVIOoAmYnuRbqKj6eUt7pBDjTZzie1hjHT8znuSCCWhL0xKb5D9nrwmtZqsj+yk+bUhb65NWXrnTmuXNUpNEpA1eERpPNo2xn3R47o44fnqnL8QOWTMUILoG8AzsuXRXomR2wabXwMUJWdSNAOux0EZD/OghAWubRsac487jgKlzj1TiObGfLk7m9JhnyoT1pC/xENamOw5TSI7Xkkrz8YVkXg3yJYm1IX/erPi+vQ7+NPv6DihLztLehtlKqzSFIXApcLZezlgjGQqnIQ/TENxwAAUrczsoBCmTkxFWj9lwInex/WelIZGQEfmMtNFHeQHi0+YVI5hZn2So4DcQpqCKyBwEvfGxunpq38DLngUtMjfo1WflOI7QFzlAuLshjlTvR6WBVKQjNuvUAduSB3G20isVVlEySdGZd/2RBaxmEsr/1hMUVdFCI/+yjkTN7mcijdfcny1J7iKSodgGXf8sds1k4UXTznCweTZs5BdPanROSgrspS+pSFtZl2PE0MbVIEhthq1Bo77oLlrzdrDrZAhFkvtA/t6pvVnM1lcWWmDvx82xx94ei5L4yfEgO11gQ3QatGdJl0dr4+W1UORL+/qauuiXAyS2QEZfokRtwROTsSuDXe8NbV4iNGsKWFmyIXbCdHNc9UnySiF8e6q31/AS96gFJ80yMJ2TJkR+suOtaDTdxAxszV+qVuMVBobxO6elVMqX4bG0N1eFF6sLZT+yWl7ffRJfS0QHM+vHIRHXeLb0G/fdo+x+AnUu9937dQICQ3tp/DRDQMe2MCfY14syBfVVF/XIlxLqJUIyTT+htW8KC/jIbDR/6pjjJF0yHrQ26AtSbY1Tk6LAqIw0lsuc1HjL6DL97Uvkxo/0bTQ9Bwpkb6XoRpxfivyVljOOzFy/lGZ8G9KecSP/frHlYoX2Vlzad2alh6wZm0i+Gp/7WW7BMvvUCAbdMNh/F1S5uUBsBO6nZKUEIm946QHBOwIw1T4NJYieTm7VR1dEExazITH2xYNHwmrOT1yGDvvbZOQ4EWbvHrDKO4UgRwy1RPrDPUIMDm6lv8so92CliVbDJCKoBMUqURVX3TjID+SFQp2n584wj3LpOcw5te5oQqS+fvLvjSp87tVQyOs+tMKsNkUHMJgfSx5EUI0lzXICrwGUluqowimYvN5nf1ZNEcGj/UcEKaE6LP2UUwq5CYHPAtIfiMmms0mP7qz/s/FwdM6lILUBAmvRo9ZB+0l2DOf/DtarQmX0QaG2Glk+0csl5yb9rr2CSKiY7cn1d66NI0Jbj4lIJE2m81bmYbgWBHpgjt+QJ/KjKNvF2oRz3NLW1cQKvu2gs3i0qYiEaB2geyji/AE5+WKkmyWKnzHjnfwJsqzp8BWkweKlRBIlAC6P7Bu1lcyXElrTBqv28eO25eCVX9HUEidZD+BocHUQ4KNRHew7zO0a2Fz7lk+LDxGA0tMM3dhtsgWF2fBpyGzDYdorpGoVlwHOnQPRzp7C8/QP9myf+s1SiI45R0NLS8PHKt4U0g8dN8Yccc9YR92wEGCSMaTJq9E+RgfbrGgiru1lDsafx8QWKoAgqH/1Hf6oDCEZbN0KvXS+JOcGVMEp9pJF//CL3tOoEpqtL5o0rUnKGkKLUnLE9coIOlj8k+3mMUqMXyCHh1oMmhQy7RCgZIVfbgYZsgJhdEPjXsiPciT855Um1nZXpm7kFOlFzwBWOpjMQwJYn+pEXAJBbao7RkheyPIfTpZ4cLSCtSbhS+CMZnbrtQoQzTqfRXBIkEeTqmh9SzLtfMF71MnEJRddyyRtQoQDwJBIYAhtTOpCHaEkFB9RZ0wwlCV6bTqpspZ8nxF0HsISYG85McCf4MwCaQdqPDs3cVGQKdCzeMIpWTZRhP5Psy6C1yPyh6D7A/BsP1/aKhxhcCn9hnEAlyejxcxy2R428ElXobcxlhQufv22xUYRORfWkXgxM4DxbrQLSqYVSStfE8fLHYM9vLuc9xZ0wiQqa9Uz1AT8D2xkcAcn/HjAPRskQWWTlZHTOTuKY8KGhkP0BvmFRhobj0CW1XVibZDFzhl3qNGgTRsbkRpIDrOg6WEFU8F7loL9FpchMNzzNvKcZCN";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
@@ -869,7 +884,7 @@ document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCas
 function recompute(){
   R=runModel(A);
   document.getElementById('acqfoot').textContent='Total clients acquis sur l\'horizon : '+fInt(R.clients.reduce((a,b)=>a+b,0))+' · MRR base de départ : '+fUSD(A.startMRR)+'.';
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='eliott'){syncElInputs();renderEliott();} else if(tab==='datareel'){renderDataReel();}
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='rbftp'){renderRBFTP();} else if(tab==='eliott'){syncElInputs();renderEliott();} else if(tab==='datareel'){renderDataReel();}
   saveState('auto');
 }
 
@@ -902,7 +917,7 @@ document.querySelectorAll('.pnltoggle button').forEach(b=>b.onclick=()=>{pnlMode
 document.getElementById('tabbar').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+tab));
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();}else if(tab==='eliott'){syncElInputs();renderEliott();}else if(tab==='datareel'){renderDataReel();}};
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='rbftp'){renderRBFTP();}else if(tab==='eliott'){syncElInputs();renderEliott();}else if(tab==='datareel'){renderDataReel();}};
 document.getElementById('csvbtn').onclick=()=>{
   const keys=['months','meta_spend','clients','active_subs','mrr_legacy','mrr_new','mrr_total','upsell_rev','net_rev','total_cogs','gross_profit','meta','total_opex','ebitda','net_cf','cash_end'];
   let csv=keys.join(',')+'\n';
@@ -929,10 +944,11 @@ function rbfMeta(N){
   }
   return m;
 }
-function runRBF(){
+function runRBF(cfg){
+  cfg=cfg||RBF;                                          // config du financeur (RBF PvX 80% par défaut, ou RBFTP 100%)
   const rbfN=rbfHorizon();
   const Ar=structuredClone(A); Ar.horizon=rbfN; Ar.meta=rbfMeta(rbfN);
-  const start=A.meta[0]||1, tgt=RBF.target, ct=RBF.cacTarget;
+  const start=A.meta[0]||1, tgt=RBF.target, ct=cfg.cacTarget;
   const cacArr=Ar.meta.map((sp,i)=>{
     if((A.cacReal||[])[i]>0) return A.cacReal[i];   // CAC RÉEL là où saisi
     if(!ct||ct===A.cac) return A.cac;
@@ -940,10 +956,10 @@ function runRBF(){
     return A.cac+(ct-A.cac)*frac;
   });
   const R0=runModel(Ar,{cacArr});
-  const N=Ar.horizon, fund=RBF.ratio;                   // % du spend financé par PvX
-  const feeBase=(RBF.feeBase!=null?RBF.feeBase:0.019), feePerMonth=(RBF.feePerMonth!=null?RBF.feePerMonth:0.0075);  // intérêt PvX = base + par mois de payback
-  const share=(RBF.repayShare!=null?RBF.repayShare:fund);  // part du CA de la cohorte prélevée par PvX chaque mois
-  const startM=Math.max(0,Math.min(N-1,Math.round(RBF.startMonth||0)));   // 1er mois financé (avant : Meta payé cash)
+  const N=Ar.horizon, fund=cfg.ratio;                   // % du spend financé
+  const feeBase=(cfg.feeBase!=null?cfg.feeBase:0.019), feePerMonth=(cfg.feePerMonth!=null?cfg.feePerMonth:0.0075);  // intérêt = base + par mois de payback
+  const share=(cfg.repayShare!=null?cfg.repayShare:fund);  // part du CA de la cohorte prélevée chaque mois
+  const startM=Math.max(0,Math.min(N-1,Math.round(cfg.startMonth||0)));   // 1er mois financé (avant : Meta payé cash)
   const cum=cohortCumul(A);                              // cash cumulé encaissé par client acquis (mix), t=0..60
   const overlay=new Array(N).fill(0);                   // effet NET du RBF sur la trésorerie, mois par mois
   const rbfCostMo=new Array(N).fill(0);                 // intérêts payés à PvX, mois par mois
@@ -1050,6 +1066,63 @@ function renderRBF(){
   }
   document.getElementById('rbfMonthly').innerHTML=mh+'</tbody>';
   document.getElementById('rbffoot').innerHTML='Termes PvX · Démarrage : <b>'+R0.months[X.startM]+'</b>. PvX finance <b>'+Math.round(RBF.ratio*100)+'% du spend Meta</b> et prélève <b>'+Math.round((RBF.repayShare!=null?RBF.repayShare:RBF.ratio)*100)+'% du CA net</b> de chaque cohorte financée jusqu\'au remboursement du principal. <b>Intérêt = '+(+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2))+'% + '+(+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2))+'%/mois de payback</b>, payé en une fois quand la cohorte atteint <b>100% Net ROAS</b> (ex. payback 9 mois → '+(((RBF.feeBase!=null?RBF.feeBase:0.019)+ (RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*8)*100).toFixed(2)+'%). Coût total intérêts sur l\'horizon : <b>'+fEurShort(X.totalCost)+'</b> (hors EBITDA). Spend & CAC <b>réels</b> intégrés là où saisis (juin/juil/août). ⚠ À l\'horizon, <b>'+fEurShort(X.outAdv)+' de principal</b> encore en cours + '+fEurShort(X.outFee)+' d\'intérêts à venir. ⚠ Term sheet indicatif — voir aussi : minimum 50% de drawdown/mois, sûreté senior (impacte ta ligne bancaire), breach d\'un seuil → ponction 100% sur la cohorte concernée.';
+}
+/* ============ RBF TP : 2e offre, 100% financé, même prix ============ */
+let rbftpCashObj,rbftpMrrObj;
+function renderRBFTP(){
+  const cfg=Object.assign({},RBF,{ratio:1,repayShare:1});   // 100% financé, 100% du CA prélevé, même prix/start/spend que RBF
+  const X=runRBF(cfg), R0=X.R0, N=R0.months.length;
+  const lowNo=Math.min(...R0.cash_end), lowY=Math.min(...X.cashRbf);
+  const cards=[
+    {k:'Spend financé',v:'100%',d:'aucun apport de ta poche'},
+    {k:'Point bas SANS',v:fEurShort(lowNo),d:R0.months[R0.cash_end.indexOf(lowNo)],cls:lowNo<0?'neg':'pos'},
+    {k:'Point bas AVEC RBF TP',v:fEurShort(lowY),d:R0.months[X.cashRbf.indexOf(lowY)],cls:lowY<0?'neg':'pos'},
+    {k:'Coût total (→2031)',v:fEurShort(X.totalCost),d:'intérêts',cls:'neg'},
+    {k:'Cash final',v:fEurShort(X.cashRbf[N-1]),d:R0.months[N-1],cls:X.cashRbf[N-1]<0?'neg':'pos'},
+  ];
+  document.getElementById('rbftpKpis').innerHTML=cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+  if(typeof Chart!=='undefined'){
+    rbftpCashObj&&rbftpCashObj.destroy();
+    rbftpCashObj=new Chart(document.getElementById('rbftpCashChart'),{type:'line',data:{labels:R0.months,datasets:[
+      {label:'Avec RBF TP',data:X.cashRbf,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
+      {label:'Sans',data:R0.cash_end,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}]},
+      options:{...opts(fEurShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fEur(c.parsed.y)}}}}});
+    rbftpMrrObj&&rbftpMrrObj.destroy();
+    const mo=opts(fShort); mo.scales.y.stacked=true; mo.scales.x.stacked=true; mo.scales.y.beginAtZero=true;
+    mo.scales.arr={position:'right',beginAtZero:true,grid:{display:false},ticks:{font:{size:11},color:'#BA7517',callback:fShort}};
+    rbftpMrrObj=new Chart(document.getElementById('rbftpMrrChart'),{type:'bar',data:{labels:R0.months,datasets:[
+      {label:'MRR base',data:R0.mrr_legacy,backgroundColor:'#7F77DD',yAxisID:'y'},
+      {label:'MRR acquis',data:R0.mrr_new,backgroundColor:'#1D9E75',yAxisID:'y'},
+      {type:'line',label:'ARR',data:R0.arr,borderColor:'#BA7517',borderWidth:2.5,pointRadius:0,tension:0.3,yAxisID:'arr',order:0,fill:false}]},options:mo});
+  }
+  /* Compte de résultat annuel 5 ans, RBF TP intégré */
+  const yrs=[...new Set(R0.months.map(m=>m.slice(0,4)))];
+  const iy=y=>R0.months.map((m,i)=>m.startsWith(y)?i:-1).filter(i=>i>=0);
+  const S=(arr,ix)=>ix.reduce((a,i)=>a+(arr[i]||0),0);
+  const otherOpex=ix=>S(R0.software,ix)+S(R0.ga,ix)+S(R0.accounting,ix)+S(R0.salestax,ix);
+  const ROWS=[
+    ['Chiffre d\'affaires net',ix=>S(R0.net_rev,ix),''],
+    ['− COGS',ix=>S(R0.total_cogs,ix),'neg'],
+    ['Marge brute',ix=>S(R0.gross_profit,ix),'major'],
+    ['− Meta',ix=>S(R0.meta,ix),'neg'],
+    ['− Salaires',ix=>S(R0.salaries,ix),'neg'],
+    ['− Autres OpEx',ix=>otherOpex(ix),'neg'],
+    ['EBITDA',ix=>S(R0.ebitda,ix),'major'],
+    ['− Coût RBF TP',ix=>-S(X.rbfCostMo,ix),'neg'],
+    ['Résultat après RBF TP',ix=>S(R0.ebitda,ix)-S(X.rbfCostMo,ix),'major'],
+    ['Trésorerie fin d\'année',ix=>X.cashRbf[ix[ix.length-1]],'cash major'],
+  ];
+  let html='<thead><tr><th>€</th>'+yrs.map(y=>`<th>${y}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
+  const allIx=R0.months.map((_,i)=>i);
+  for(const [label,fn,kind] of ROWS){
+    const isCash=kind.includes('cash');
+    html+=`<tr class="${kind.includes('major')?'major':''}"><td>${label}</td>`;
+    for(const y of yrs){ const v=fn(iy(y)); html+=`<td class="${v<0?'neg':''}">${fEur(v)}</td>`; }
+    const tot=isCash?fn(allIx):yrs.reduce((a,y)=>a+fn(iy(y)),0);
+    html+=`<td class="${tot<0?'neg':''}"><b>${fEur(tot)}</b></td></tr>`;
+  }
+  document.getElementById('rbftpPnl').innerHTML=html+'</tbody>';
+  document.getElementById('rbftpfoot').innerHTML='Financement <b>100% du spend</b>, même prix que PvX ('+(+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2))+'% + '+(+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2))+'%/mois). Tu n\'avances rien sur le Meta ; le financeur prélève 100% du CA des cohortes financées jusqu\'au remboursement. EBITDA opérationnel inchangé ; le coût RBF est un coût de financement (sous l\'EBITDA). Spend & CAC réels intégrés (juin/juil/août).';
 }
 function syncRbfInputs(){
   const g=id=>document.getElementById(id); if(!g('rbf_target'))return;
