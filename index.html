@@ -368,27 +368,39 @@ function runModel(A,opts){
    firstCash = prix payé à la souscription (plein, base du ROAS J0).
    recurMo = équivalent mensuel du récurrent (weekly→mensuel). LTV = 1er paiement + flux récurrent actualisé du churn. */
 function unitEcon(A){
-  const P=A.products;
+  const P=A.products, upM=A.upMtoY||0, upQ=A.upQtoY||0, ups=A.upsells||[];
   const ePrice=k=>{const p=P[k];return p.monthly+(p.eliteShare||0)*((p.elitePrice||p.monthly)-p.monthly);};   // récurrent moyen Elite inclus
   const eFirst=k=>{const p=P[k];return p.first+(p.eliteShare||0)*((p.eliteFirst||p.first)-p.first);};          // 1er paiement moyen Elite inclus
   const mE=k=>ePrice(k)/(P[k].cycle||1);   // équivalent mensuel (ARPU affiché, Elite inclus)
   const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));
-  let firstCash=0,arpu=0,ltv=0; const per=[];
-  /* LTV RÉELLE (facturation par cycle) : le récurrent est encaissé tous les `cycle` mois, pondéré par la survie — plus de lissage */
+  let arpu=0; const per=[];
+  /* LTV par produit (abonnement seul) — pour le détail affiché */
   for(let k=0;k<4;k++){
     const cK=P[k].churn, L=CYC[k], pr=ePrice(k);
     let lp=eFirst(k), s=1;
     for(let t=1;t<=600;t++){ s*=(1-cK); if(t%L===0) lp+=s*pr; }
-    firstCash+=P[k].mix*eFirst(k); arpu+=P[k].mix*mE(k); ltv+=P[k].mix*lp;
+    arpu+=P[k].mix*mE(k);
     per.push({name:P[k].name,first:eFirst(k),monthly:mE(k),ltv:lp});
   }
-  /* Payback RÉEL : mois où le cumul ENCAISSÉ par client acquis (facturation par cycle, churn inclus) atteint le CAC */
-  let cum=firstCash, payback=Infinity;
-  if(cum>=A.cac) payback=0;
-  else { const s=P.map(()=>1);
-    for(let t=1;t<=600;t++){ let add=0;
-      for(let k=0;k<4;k++){ s[k]*=(1-P[k].churn); if(t%CYC[k]===0) add+=P[k].mix*s[k]*ePrice(k); }
-      cum+=add; if(cum>=A.cac){payback=t;break;} } }
+  /* Simulation COMPLÈTE par client acquis (blended) : abonnement + upgrade annuel + upsells (attach rates) →
+     LTV, 1er cash (ROAS J0) et payback intègrent tout, cohérents avec le CA net du modèle. */
+  let pool=P.map(p=>p.mix), upg=0; const upRec=ups.map(()=>0);
+  let firstCash=0, ltv=0, cum=0, payback=Infinity;
+  for(let t=0;t<=600;t++){
+    let c=0;
+    for(let k=0;k<4;k++){ if(t===0) c+=pool[k]*eFirst(k); else if(t%CYC[k]===0) c+=pool[k]*ePrice(k); }
+    if(t>0 && t%12===0) c+=upg*ePrice(3);                        // upgrade vers l'annuel : réabo tous les 12 mois
+    for(let j=0;j<ups.length;j++){ const u=ups[j];
+      if(u.recur){ if(t===0) upRec[j]=(u.attach||0); c+=upRec[j]*((u.price||0)/12); upRec[j]*=(1-(u.churn||0)); }   // upsell récurrent (pool par client)
+      else if(t===0) c+=(u.attach||0)*(u.price||0);              // upsell one-off à l'acquisition
+    }
+    if(t===0) firstCash=c;
+    ltv+=c; cum+=c;
+    if(payback===Infinity && cum>=A.cac) payback=t;
+    const mig=pool[1]*(1-P[1].churn)*upM + pool[2]*(1-P[2].churn)*upQ;   // migrants mensuels+trimestriels vers l'annuel
+    pool[0]*=(1-P[0].churn); pool[1]*=(1-P[1].churn)*(1-upM); pool[2]*=(1-P[2].churn)*(1-upQ); pool[3]*=(1-P[3].churn);
+    upg=upg*(1-P[3].churn)+mig;
+  }
   const roas=A.cac>0?firstCash/A.cac:0, ltvcac=A.cac>0?ltv/A.cac:0;
   return {firstCash,arpu,roas,payback,ltv,ltvcac,per};
 }
@@ -424,7 +436,7 @@ let A=structuredClone(DEFAULTS);
 const STORAGE_KEY='oneleaf_model_v5';
 let lastSaved=null;
 /* ===== version hébergée chiffrée : HOSTED_DATA rempli = mode hébergé verrouillé ===== */
-const HOSTED_DATA="h+K3athk9Z3q3D+SfzakkA==.6r40Tl20grI/BPsG.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";
+const HOSTED_DATA="IrAjS2AuMa8LHvFNBf59Lg==.CmK28zAOSP874MyJ.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";
 const PRELOAD_DATA="";   // version publique sans mot de passe : données en clair (base64), aucune protection
 let HOSTED=false;
 function _b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));}
