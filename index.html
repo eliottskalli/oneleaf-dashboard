@@ -108,7 +108,7 @@
     <button data-tab="cash">Trésorerie</button>
     <button data-tab="cashreal">Trésorerie réelle</button>
     <button data-tab="rbf">RBF Oneleaf</button>
-    <button data-tab="rbftp">RBF TP (100%)</button>
+    <button data-tab="rbftp">RBF TP</button>
     <button data-tab="eliott">Prêt Eliott</button>
     <button data-tab="datareel">Data réel</button>
   </div>
@@ -221,14 +221,14 @@
         <div class="b"><label>Mois de démarrage</label><select id="rbftp_start"></select></div>
         <div class="b"><label>Spend cible (€/mois)</label><input id="rbftp_target" type="number" step="10000"></div>
         <div class="b"><label>Mois pour atteindre la cible</label><input id="rbftp_ramp" type="number" step="1"></div>
-        <div class="b"><label>% du spend financé</label><input id="rbftp_ratio" type="number" value="100" disabled style="opacity:.6"></div>
+        <div class="b"><label>% du spend financé</label><input id="rbftp_ratio" type="number" value="80" disabled style="opacity:.6"></div>
         <div class="b"><label>Intérêt — base (%)</label><input id="rbftp_feebase" type="number" step="0.05"></div>
         <div class="b"><label>+ % par mois de payback</label><input id="rbftp_feeperm" type="number" step="0.05"></div>
         <div class="b"><label>CAC au spend cible (€)</label><input id="rbftp_cactgt" type="number" step="1" placeholder="constant"></div>
       </div>
-      <p class="note" style="margin:0 0 12px">Deuxième offre — <b>financement 100% du spend</b> (au lieu de 80%), <b>même prix</b> que PvX (1,90% + 0,75%/mois de payback, intérêt au 100% Net ROAS). Le financeur avance <b>100% du Meta</b> et prélève <b>100% du CA net</b> de chaque cohorte financée jusqu'au remboursement. Tu n'avances <b>rien</b> de ta poche sur le Meta.</p>
+      <p class="note" style="margin:0 0 12px">Deuxième offre — <b>financement 80% du spend</b> (comme PvX) + <b>recoup 100% du CA en priorité</b>, <b>même prix</b> que PvX (1,90% + 0,75%/mois de payback, intérêt au 100% Net ROAS). Le financeur avance <b>80% du Meta</b> et prélève <b>100% du CA net</b> de chaque cohorte financée jusqu'au remboursement. Tu avances les <b>20% restants</b> du Meta.</p>
       <div class="kpis" id="rbftpKpis"></div>
-      <div class="panel"><h2>Trésorerie — avec vs sans RBF TP</h2><p class="csub">Financement 100% du spend, même plan de croissance</p>
+      <div class="panel"><h2>Trésorerie — avec vs sans RBF TP</h2><p class="csub">Financement 80% du spend, recoup 100% du CA en priorité</p>
         <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Avec RBF TP</span><span><span class="dash" style="border-top-color:#888780"></span>Sans</span></div>
         <div class="chartwrap lg"><canvas id="rbftpCashChart"></canvas></div></div>
       <div class="panel"><h2>MRR &amp; ARR</h2><p class="csub">Croissance du récurrent sous ce plan</p>
@@ -238,7 +238,7 @@
         <div style="overflow-x:auto"><table class="dt" id="rbftpPnl"></table></div>
         <div class="foot" id="rbftpfoot"></div></div>
       <div class="panel"><h2>Trésorerie mois par mois — détail RBF TP</h2>
-        <p class="csub">Chaque mois : avance (100% du spend, à M+1) − principal prélevé sur le CA − intérêts (au 100% Net ROAS) = flux net, puis la trésorerie avec vs sans.</p>
+        <p class="csub">Chaque mois : avance (80% du spend, à M+1) − principal prélevé sur le CA − intérêts (au 100% Net ROAS) = flux net, puis la trésorerie avec vs sans.</p>
         <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" id="rbftpMonthly"></table></div></div>
     </section>
 
@@ -1091,14 +1091,14 @@ function renderRBF(){
   document.getElementById('rbfMonthly').innerHTML=mh+'</tbody>';
   document.getElementById('rbffoot').innerHTML='Termes PvX · Démarrage : <b>'+R0.months[X.startM]+'</b>. PvX finance <b>'+Math.round(RBF.ratio*100)+'% du spend Meta</b> et prélève <b>'+Math.round((RBF.repayShare!=null?RBF.repayShare:RBF.ratio)*100)+'% du CA net</b> de chaque cohorte financée jusqu\'au remboursement du principal. <b>Intérêt = '+(+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2))+'% + '+(+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2))+'%/mois de payback</b>, payé en une fois quand la cohorte atteint <b>100% Net ROAS</b> (ex. payback 9 mois → '+(((RBF.feeBase!=null?RBF.feeBase:0.019)+ (RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*8)*100).toFixed(2)+'%). Coût total intérêts sur l\'horizon : <b>'+fEurShort(X.totalCost)+'</b> (hors EBITDA). Spend & CAC <b>réels</b> intégrés là où saisis (juin/juil/août). ⚠ À l\'horizon, <b>'+fEurShort(X.outAdv)+' de principal</b> encore en cours + '+fEurShort(X.outFee)+' d\'intérêts à venir. ⚠ Term sheet indicatif — voir aussi : minimum 50% de drawdown/mois, sûreté senior (impacte ta ligne bancaire), breach d\'un seuil → ponction 100% sur la cohorte concernée.';
 }
-/* ============ RBF TP : 2e offre, 100% financé, même prix ============ */
+/* ============ RBF TP : offre TP, 80% financé + recoup 100% priorité, même prix ============ */
 let rbftpCashObj,rbftpMrrObj;
 function renderRBFTP(){
-  const cfg=Object.assign({},RBF,{ratio:1,repayShare:1});   // 100% financé, 100% du CA prélevé, même prix/start/spend que RBF
+  const cfg=Object.assign({},RBF,{ratio:0.8,repayShare:1});   // TP : 80% financé (comme PvX), 100% du CA prélevé en priorité
   const X=runRBF(cfg), R0=X.R0, N=R0.months.length;
   const lowNo=Math.min(...R0.cash_end), lowY=Math.min(...X.cashRbf);
   const cards=[
-    {k:'Spend financé',v:'100%',d:'aucun apport de ta poche'},
+    {k:'Spend financé',v:'80%',d:'recoup 100% en priorité'},
     {k:'Point bas SANS',v:fEurShort(lowNo),d:R0.months[R0.cash_end.indexOf(lowNo)],cls:lowNo<0?'neg':'pos'},
     {k:'Point bas AVEC RBF TP',v:fEurShort(lowY),d:R0.months[X.cashRbf.indexOf(lowY)],cls:lowY<0?'neg':'pos'},
     {k:'Coût total (→2031)',v:fEurShort(X.totalCost),d:'intérêts',cls:'neg'},
@@ -1146,7 +1146,7 @@ function renderRBFTP(){
     html+=`<td class="${tot<0?'neg':''}"><b>${fEur(tot)}</b></td></tr>`;
   }
   document.getElementById('rbftpPnl').innerHTML=html+'</tbody>';
-  document.getElementById('rbftpfoot').innerHTML='Financement <b>100% du spend</b>, même prix que PvX ('+(+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2))+'% + '+(+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2))+'%/mois). Tu n\'avances rien sur le Meta ; le financeur prélève 100% du CA des cohortes financées jusqu\'au remboursement. EBITDA opérationnel inchangé ; le coût RBF est un coût de financement (sous l\'EBITDA). Spend & CAC réels intégrés (juin/juil/août).';
+  document.getElementById('rbftpfoot').innerHTML='Financement <b>80% du spend</b> (comme PvX), recoup <b>100% du CA en priorité</b>, même prix ('+(+((RBF.feeBase!=null?RBF.feeBase:0.019)*100).toFixed(2))+'% + '+(+((RBF.feePerMonth!=null?RBF.feePerMonth:0.0075)*100).toFixed(2))+'%/mois). Tu avances les 20% restants du Meta ; le financeur prélève 100% du CA des cohortes financées jusqu\'au remboursement. EBITDA opérationnel inchangé ; le coût RBF est un coût de financement (sous l\'EBITDA). Spend & CAC réels intégrés (juin/juil/août).';
   /* Trésorerie mois par mois — détail RBF TP */
   const mcols=[
     ['Mois',m=>R0.months[m],'lab'],['Spend Meta',m=>-X.meta[m],'neg'],['Avance RBF TP',m=>X.rbfIn[m],'pos'],
