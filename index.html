@@ -106,6 +106,7 @@
     <button data-tab="dash" class="on">Tableau de bord</button>
     <button data-tab="acq">Acquisition mensuelle</button>
     <button data-tab="cash">Trésorerie</button>
+    <button data-tab="renew">Tréso renouvellement</button>
     <button data-tab="cashreal">Trésorerie réelle</button>
     <button data-tab="rbf">RBF PVX</button>
     <button data-tab="rbftp">RBF TP</button>
@@ -168,6 +169,18 @@
         <p class="csub">Ce qui entre et sort réellement du compte chaque mois. <b>Meta est payé à 30 jours</b> : le virement du mois M correspond à la dépense Meta du mois M-1. La colonne « Cash avant Meta » = ce qu'il y a sur le compte juste avant de lancer le virement Meta (après avoir encaissé le CA et payé salaires, COGS et frais courants du mois) — utile pour vérifier que tu peux à la fois payer tes équipes et Meta.</p>
         <div class="scroll"><table class="dt" id="cashDecomp"></table></div>
         <div class="foot">Cash fin = Cash début + CA net − COGS − Salaires − Logiciels − G&A − Compta − Sales tax − Capex − Remb. BPI − Meta (M-1). « Cash avant Meta » = Cash fin + virement Meta (le solde si Meta n'avait pas encore été débité).</div></div>
+    </section>
+
+    <section class="tabpane" id="pane-renew">
+      <p class="note" style="margin:0 0 12px">Même modèle, mais le <b>churn du Quarterly est appliqué au renouvellement</b> (tous les 3 mois), pas lissé au mois. 1<sup>er</sup> renouvellement <b id="renewR1lbl">45%</b> (pricing actuel), puis renouvellement conditionnel croissant (survivants de plus en plus fidèles : 55% → 64% → 73% → 77% → 85%), calé sur tes cohortes Stripe. On compare la <b>trésorerie renewal-based</b> à celle du <b>churn 17%/mois</b> utilisé dans les autres onglets. Le reste (prix, mix, upsells, legacy, ligne de caisse) est identique.</p>
+      <div class="bulk" style="margin-bottom:10px"><div class="b"><label>1er renouvellement Quarterly (%)</label><input id="rn_r1" type="number" step="1"></div><span class="note" style="align-self:center">Le 1er renouvellement (M3) pilote le reste de la courbe. Les renouvellements suivants gardent la forme des cohortes matures.</span></div>
+      <div class="kpis" id="renewKpis"></div>
+      <div class="panel"><h2>Trésorerie — renouvellement Stripe vs churn 17%/mois</h2><p class="csub">Solde de cash en fin de mois. La ligne renewal-based descend plus bas car le Quarterly encaisse moins vite (moins de renouvellements précoces).</p>
+        <div class="legend"><span><span class="sw" style="background:#185FA5"></span>Renouvellement (Stripe)</span><span><span class="dash" style="border-top-color:#888780"></span>Churn 17%/mois (modèle actuel)</span></div>
+        <div class="chartwrap lg"><canvas id="renewBig"></canvas></div></div>
+      <div class="panel"><h2>Détail mensuel — trésorerie renouvellement</h2>
+        <div class="scroll"><table class="dt" id="renewTable"></table></div>
+        <div class="foot">CA encaissé et EBITDA recalculés avec le churn au renouvellement. Net CF = EBITDA − capex + décalage Meta − remb. BPI. Cash fin = cash début + Net CF (ligne de caisse incluse).</div></div>
     </section>
 
     <section class="tabpane" id="pane-cashreal">
@@ -293,11 +306,41 @@ function runModel(A,opts){
   const legArr=[],newArr=[],totArr=[],subs=[],clients=[],upgArr=[],upsArr=[],netArr=[],cashArr=[],firstArr=[];
   const upPool=A.upsells.map(()=>0);   // pool d'abonnés par upsell récurrent
   const g=(a,m)=>m<0?0:a[m];
+  /* ===== Mode « renouvellement » : le quarterly churne AU RENOUVELLEMENT (tous les `cycle` mois), pas lissé au mois.
+     1er renouvellement = renewCond[0] (ex. 45%), puis renouvellement conditionnel croissant. Calé sur les cohortes Stripe.
+     On précalcule par convolution des cohortes ; le reste du moteur (P&L, trésorerie) est inchangé. ===== */
+  const renewMode=!!opts.renewalMode;
+  const rcond=opts.renewCond||[0.45,0.55,0.64,0.73,0.77,0.85];
+  const rsteady=rcond.length?rcond[rcond.length-1]:0.85;
+  let qk=P.findIndex(p=>/quarter|trimestr/i.test(p.name||'')); if(qk<0)qk=CYC.findIndex(c=>c===3);
+  const QACT=new Array(N).fill(0),QREV=new Array(N).fill(0),QCASH=new Array(N).fill(0),QFIRST=new Array(N).fill(0);
+  if(renewMode && qk>=0){
+    const cyc=CYC[qk], eF=eFirst(qk), eP=ePrice(qk), mEqQ=mEq(qk), mixQ=P[qk].mix;
+    const condAt=j=>j<rcond.length?rcond[j]:rsteady;   // renouvellement conditionnel du j-ième renouvellement (0-indexé)
+    for(let c=0;c<N;c++){
+      const _cacC=(opts.cacArr&&opts.cacArr[c]>0)?opts.cacArr[c]:A.cac;
+      const ncq=(_cacC>0?meta[c]/_cacC:0)*mixQ;         // nouveaux quarterly de la cohorte du mois c
+      if(ncq<=0) continue;
+      let surv=1, rNum=0;                                // fraction survivante · nombre de renouvellements franchis
+      for(let a=0;a+c<N;a++){
+        const m=c+a;
+        if(a>0 && a%cyc===0){ surv*=condAt(rNum); rNum++; }             // décision de renouvellement à a=cyc,2cyc,...
+        QACT[m]+=ncq*surv;                                              // parc actif (verrouillé pendant le cycle payé)
+        if(a===0){ QREV[m]+=ncq*eF; QFIRST[m]+=ncq*eF; QCASH[m]+=ncq*eF; }        // intro : spike accrual + encaissement
+        else { QREV[m]+=ncq*surv*mEqQ; if(a%cyc===0) QCASH[m]+=ncq*surv*eP; }     // MRR lissé + encaissement au renouvellement
+      }
+    }
+  }
   for(let m=0;m<N;m++){
     const _cac=(opts.cacArr&&opts.cacArr[m]>0)?opts.cacArr[m]:A.cac;   // CAC réel par mois si fourni, sinon CAC hypothèse
     clients[m]=_cac>0?meta[m]/_cac:0;
     let cohortRev=0,cohortAct=0,cohortCash=0,firstRevM=0;
     for(let k=0;k<4;k++){
+      if(renewMode && k===qk){                     // quarterly en mode renouvellement : valeurs précalculées par convolution
+        act[k][m]=QACT[m]; rev[k][m]=QREV[m];
+        cohortRev+=QREV[m]; cohortAct+=QACT[m]; cohortCash+=QCASH[m]; firstRevM+=QFIRST[m];
+        continue;
+      }
       const newc=clients[m]*P[k].mix;
       const retained=g(act[k],m-1)*ret[k];        // retenus = parc précédent × rétention
       act[k][m]=retained+newc;
@@ -801,6 +844,39 @@ function renderTreasury(){
   syncLigneInputs();
 }
 
+/* ===== Onglet « Tréso renouvellement » : churn du Quarterly appliqué au renouvellement (Stripe) vs 17%/mois ===== */
+let renewBig;
+const RENEW_COND=[0.45,0.55,0.64,0.73,0.77,0.85];   // renouvellement conditionnel : 1er, 2e, 3e... (forme des cohortes matures)
+function renewCondVec(){ const v=RENEW_COND.slice(); const r1=parseFloat((document.getElementById('rn_r1')||{}).value); if(r1>0&&r1<=100) v[0]=r1/100; return v; }
+function renewKpiHTML(Rr,Rc){
+  const N=Rr.months.length, mc=Math.min(...Rr.cash_end), mi=Rr.cash_end.indexOf(mc), mcC=Math.min(...Rc.cash_end), rw=Rr.cash_end.findIndex(v=>v<0);
+  const cards=[
+    {k:'Point bas — renouvellement',v:fEurShort(mc),d:Rr.months[mi],cls:mc<0?'neg':'pos'},
+    {k:'Point bas — churn 17%/mois',v:fEurShort(mcC),d:'référence',cls:mcC<0?'neg':'pos'},
+    {k:'Écart au point bas',v:fEurShort(mc-mcC),d:'renouvellement − 17%/mois',cls:(mc-mcC)<0?'neg':'pos'},
+    {k:'Cash final — renouvellement',v:fEurShort(Rr.cash_end[N-1]),d:Rr.months[N-1],cls:Rr.cash_end[N-1]<0?'neg':'pos'},
+    {k:'Runway',v:rw<0?'> horizon':(rw+1)+' mois',d:rw<0?'cash jamais négatif':'négatif en '+Rr.months[rw],cls:rw<0?'pos':'neg'},
+  ];
+  return cards.map(c=>`<div class="kpi"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+}
+function renderRenew(){
+  const r1i=document.getElementById('rn_r1'); if(r1i && (r1i.value===''||r1i.value==null)) r1i.value=45;
+  const cond=renewCondVec();
+  const Rr=applyLigne(runModel(A,{renewalMode:true,renewCond:cond}));   // trésorerie renewal-based (Stripe)
+  const Rc=applyLigne(runModel(A));                                     // trésorerie churn 17%/mois (référence)
+  document.getElementById('renewKpis').innerHTML=renewKpiHTML(Rr,Rc);
+  if(typeof Chart!=='undefined'){ renewBig&&renewBig.destroy();
+    const ds=[
+      {label:'Renouvellement (Stripe)',data:Rr.cash_end,borderColor:'#185FA5',backgroundColor:'rgba(55,138,221,0.10)',fill:true,tension:0.3,pointRadius:0,borderWidth:2.5,segment:{borderColor:c=>c.p1.parsed.y<0?'#D85A30':'#185FA5'}},
+      {label:'Churn 17%/mois (actuel)',data:Rc.cash_end,borderColor:'#888780',borderDash:[6,4],borderWidth:1.5,pointRadius:0,tension:0.3,fill:false}];
+    const cap=A.ligneMontant||0; if(cap>0) ds.push({label:'Plafond ligne',data:Rr.months.map(()=>-cap),borderColor:'#BA7517',borderDash:[3,3],borderWidth:1.5,pointRadius:0,fill:false});
+    renewBig=new Chart(document.getElementById('renewBig'),{type:'line',data:{labels:Rr.months,datasets:ds},options:{...opts(fShort),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fUSD(c.parsed.y)}}}}});
+  }
+  document.getElementById('renewTable').innerHTML=tresDetailHTML(Rr);
+  const lbl=document.getElementById('renewR1lbl'); if(lbl) lbl.textContent=Math.round(cond[0]*100)+'%';
+}
+(function(){ const e=document.getElementById('rn_r1'); if(e) e.addEventListener('input',()=>{ try{renderRenew();}catch(err){} }); })();
+
 /* ===== Onglet « Trésorerie réelle » : même décompte, mais CAC réel saisi par mois ===== */
 let cashBigR;
 /* ligne de caisse : découvert renouvelable, plafond A.ligneMontant, intérêts A.ligneTaux/an sur le tiré.
@@ -911,7 +987,7 @@ document.getElementById('bk_cacreal_clear').onclick=()=>{A.cacReal=[]; renderCas
 function recompute(){
   R=runModel(A);
   document.getElementById('acqfoot').textContent='Total clients acquis sur l\'horizon : '+fInt(R.clients.reduce((a,b)=>a+b,0))+' · MRR base de départ : '+fUSD(A.startMRR)+'.';
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='rbftp'){renderRBFTP();} else if(tab==='eliott'){syncElInputs();renderEliott();} else if(tab==='datareel'){renderDataReel();}
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();} else if(tab==='cash'){renderTreasury();} else if(tab==='renew'){renderRenew();} else if(tab==='cashreal'){renderCashReal();} else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='rbftp'){renderRBFTP();} else if(tab==='eliott'){syncElInputs();renderEliott();} else if(tab==='datareel'){renderDataReel();}
   saveState('auto');
 }
 
@@ -944,7 +1020,7 @@ document.querySelectorAll('.pnltoggle button').forEach(b=>b.onclick=()=>{pnlMode
 document.getElementById('tabbar').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+tab));
-  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='rbftp'){renderRBFTP();}else if(tab==='eliott'){syncElInputs();renderEliott();}else if(tab==='datareel'){renderDataReel();}};
+  if(tab==='dash'){renderKPIs();renderCharts();renderPnl();buildYearSeg();}else if(tab==='cash'){renderTreasury();}else if(tab==='renew'){renderRenew();}else if(tab==='cashreal'){renderCashReal();}else if(tab==='rbf'){syncRbfInputs();renderRBF();} else if(tab==='rbftp'){renderRBFTP();}else if(tab==='eliott'){syncElInputs();renderEliott();}else if(tab==='datareel'){renderDataReel();}};
 document.getElementById('csvbtn').onclick=()=>{
   const keys=['months','meta_spend','clients','active_subs','mrr_legacy','mrr_new','mrr_total','upsell_rev','net_rev','total_cogs','gross_profit','meta','total_opex','ebitda','net_cf','cash_end'];
   let csv=keys.join(',')+'\n';
