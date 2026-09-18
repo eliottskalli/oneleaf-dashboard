@@ -309,8 +309,8 @@ function runModel(A,opts){
   /* ===== Mode « renouvellement » : le quarterly churne AU RENOUVELLEMENT (tous les `cycle` mois), pas lissé au mois.
      1er renouvellement = renewCond[0] (ex. 45%), puis renouvellement conditionnel croissant. Calé sur les cohortes Stripe.
      On précalcule par convolution des cohortes ; le reste du moteur (P&L, trésorerie) est inchangé. ===== */
-  const renewMode=!!opts.renewalMode;
-  const rcond=opts.renewCond||[0.45,0.55,0.64,0.73,0.77,0.85];
+  const renewMode=!!(opts.renewalMode||A.renewalMode);   // flag global par scénario (ou forcé via opts)
+  const rcond=opts.renewCond||A.renewCond||[0.46,0.55,0.64,0.73,0.77,0.85];
   const rsteady=rcond.length?rcond[rcond.length-1]:0.85;
   let qk=P.findIndex(p=>/quarter|trimestr/i.test(p.name||'')); if(qk<0)qk=CYC.findIndex(c=>c===3);
   const QACT=new Array(N).fill(0),QREV=new Array(N).fill(0),QCASH=new Array(N).fill(0),QFIRST=new Array(N).fill(0);
@@ -428,11 +428,18 @@ function unitEcon(A){
   }
   /* Simulation COMPLÈTE par client acquis (blended) : abonnement + upgrade annuel + upsells (attach rates) →
      LTV, 1er cash (ROAS J0) et payback intègrent tout, cohérents avec le CA net du modèle. */
+  const renew=!!A.renewalMode, rc=A.renewCond||[0.46,0.55,0.64,0.73,0.77,0.85];   // mode renouvellement (quarterly) par scénario
+  let qk=P.findIndex(p=>/quart|trimestr/i.test(p.name||'')); if(qk<0)qk=CYC.findIndex(c=>c===3);
+  const condAt=j=>rc[j]!=null?rc[j]:rc[rc.length-1]; let qRen=0;
   let pool=P.map(p=>p.mix), upg=0; const upRec=ups.map(()=>0);
   let firstCash=0, ltv=0, cum=0, payback=Infinity;
   for(let t=0;t<=600;t++){
     let c=0;
-    for(let k=0;k<4;k++){ if(t===0) c+=pool[k]*eFirst(k); else if(t%CYC[k]===0) c+=pool[k]*ePrice(k); }
+    for(let k=0;k<4;k++){
+      if(t===0) c+=pool[k]*eFirst(k);
+      else if(renew && k===qk){ if(t%CYC[k]===0){ pool[k]*=condAt(qRen); qRen++; c+=pool[k]*ePrice(k); } }   // quarterly : churn AU renouvellement
+      else if(t%CYC[k]===0) c+=pool[k]*ePrice(k);
+    }
     if(t>0 && t%12===0) c+=upg*ePrice(3);                        // upgrade vers l'annuel : réabo tous les 12 mois
     for(let j=0;j<ups.length;j++){ const u=ups[j];
       if(u.recur){ if(t===0) upRec[j]=(u.attach||0); c+=upRec[j]*((u.price||0)/12); upRec[j]*=(1-(u.churn||0)); }   // upsell récurrent (pool par client)
@@ -442,7 +449,7 @@ function unitEcon(A){
     ltv+=c; cum+=c;
     if(payback===Infinity && cum>=A.cac) payback=t;
     const mig=pool[1]*(1-P[1].churn)*upM + pool[2]*(1-P[2].churn)*upQ;   // migrants mensuels+trimestriels vers l'annuel
-    pool[0]*=(1-P[0].churn); pool[1]*=(1-P[1].churn)*(1-upM); pool[2]*=(1-P[2].churn)*(1-upQ); pool[3]*=(1-P[3].churn);
+    pool[0]*=(1-P[0].churn); pool[1]*=(1-P[1].churn)*(1-upM); if(!(renew&&qk===2)) pool[2]*=(1-P[2].churn)*(1-upQ); pool[3]*=(1-P[3].churn);
     upg=upg*(1-P[3].churn)+mig;
   }
   const roas=A.cac>0?firstCash/A.cac:0, ltvcac=A.cac>0?ltv/A.cac:0;
@@ -496,11 +503,14 @@ async function decryptModel(blob,pw){const[s,i,c]=blob.split('.');
   const key=await _deriveKey(pw,_unb64(s));
   const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:_unb64(i)},key,_unb64(c));
   return JSON.parse(new TextDecoder().decode(pt));}
-function saveState(kind){if(HOSTED)return;try{localStorage.setItem(skey(),JSON.stringify(A));lastSaved=new Date();updateSaveStatus(kind);}catch(e){const el=document.getElementById('saveStatus');if(el)el.textContent='⚠ Sauvegarde impossible';}}
+let MEM={};   // stockage en mémoire : mode hébergé (localStorage désactivé) → scénarios A/B en session
+function stGet(k){ try{ return HOSTED ? (MEM[k]!==undefined?MEM[k]:null) : localStorage.getItem(k); }catch(e){ return null; } }
+function stSet(k,v){ try{ if(HOSTED) MEM[k]=v; else localStorage.setItem(k,v); }catch(e){} }
+function saveState(kind){try{stSet(skey(),JSON.stringify(A));}catch(e){const el=document.getElementById('saveStatus');if(el)el.textContent='⚠ Sauvegarde impossible';return;} if(HOSTED)return; lastSaved=new Date();updateSaveStatus(kind);}
 /* migration : produits sans `cycle` = ancien format où `monthly` était l'équivalent MENSUEL.
    On ajoute le cycle (Weekly/Monthly=1, Quarterly=3, Yearly=12) et on convertit monthly en PRIX PAR CYCLE (encaissé). */
 function migrateProducts(){const def=[1,1,3,12];(A.products||[]).forEach((p,i)=>{if(p.cycle===undefined){p.cycle=def[i]||1;p.monthly=(p.monthly||0)*p.cycle;} if(p.eliteShare===undefined)p.eliteShare=0; if(p.eliteFirst===undefined)p.eliteFirst=(i===2?29.99:p.first); if(p.elitePrice===undefined)p.elitePrice=(i===2?99.99:p.monthly);});}
-function loadState(){try{const raw=localStorage.getItem(skey());if(!raw)return false;const o=JSON.parse(raw);A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();
+function loadState(){try{const raw=stGet(skey());if(!raw)return false;const o=JSON.parse(raw);A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();
   A.upsells=A.upsells||[];
   A.upsells.forEach(u=>{if(u.recur===undefined)u.recur=false; if(u.churn===undefined)u.churn=0;});
   if(!A.upsells.some(u=>(u.name||'').toLowerCase().includes('calorie'))) A.upsells.push({name:'Calorie tracker',base:'Nouveaux',attach:0.10,price:39.99,recur:true,churn:0.06});
@@ -551,7 +561,7 @@ function showLockScreen(){
       A=Object.assign(structuredClone(DEFAULTS),o);resizeArrays();
       A.upsells=A.upsells||[];A.upsells.forEach(u=>{if(u.recur===undefined)u.recur=false;if(u.churn===undefined)u.churn=0;});
       migrateProducts();
-      ov.remove();buildAssumptions();buildAcqTable();syncBulk();recompute();buildYearSeg();updateScenarioSel();
+      ov.remove();buildAssumptions();buildAcqTable();syncBulk();recompute();buildYearSeg();updateScenarioSel();saveState('auto');
     }catch(e){err.textContent='Mot de passe incorrect.';}};
   document.getElementById('lockBtn').onclick=tryUnlock;
   document.getElementById('lockPw').addEventListener('keydown',e=>{if(e.key==='Enter')tryUnlock();});
@@ -599,6 +609,17 @@ function buildAssumptions(){
     <p class="note" id="mixnote"></p>
     <div class="econ" id="econBox"></div>
     <p class="note">Budget Meta par mois → onglet <b>Acquisition mensuelle</b>. Le ROAS et le payback se déduisent des prix produits.</p>
+  </div></details>
+  <details class="grp" open><summary>Churn Quarterly — mode <span class="chev">▶</span></summary><div class="body">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin:2px 0 8px;cursor:pointer">
+      <input type="checkbox" class="renewctl" id="renewToggle" ${a.renewalMode?'checked':''} style="width:auto;flex:none">
+      <span>Churn <b>au renouvellement</b> (décoché = 17%/mois lissé)</span></label>
+    <div id="renewFields" style="${a.renewalMode?'':'display:none'}">
+      <p class="note" style="font-size:11px;margin:0 0 6px">% des survivants qui <b>renouvellent</b> à chaque échéance trimestrielle (R1 = 1ᵉʳ renouvellement, M3).</p>
+      <table class="ptable"><thead><tr><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th><th>R6</th></tr></thead>
+      <tbody><tr>${[0,1,2,3,4,5].map(j=>`<td><input type="number" step="1" class="renewctl" data-rcond="${j}" value="${Math.round(((a.renewCond||[0.46,0.55,0.64,0.73,0.77,0.85])[j]||0)*100)}"></td>`).join('')}</tr></tbody></table>
+      <p class="note" style="font-size:11px;margin:6px 0 0">R1 = ta donnée réelle (~46%). R2–R6 = forme des cohortes matures. Le Quarterly reste actif pendant son trimestre payé, puis churne au renouvellement. S'applique à <b>tout le modèle</b> (P&L, trésorerie, RBF).</p>
+    </div>
   </div></details>
   <details class="grp" open><summary>Abonnement Elite (surprix) <span class="chev">▶</span></summary><div class="body">
     <table class="ptable"><thead><tr><th>Produit</th><th>% en Elite</th><th>1ᵉʳ Elite $</th><th>Récurr. Elite $</th></tr></thead><tbody>
@@ -652,6 +673,14 @@ function buildAssumptions(){
     <p class="note">Remboursement d'un prêt déjà reçu : <b>sortie de cash mensuelle</b>, hors EBITDA (comme un remboursement de dette). La courbe de trésorerie affiche <b>avec</b> mensualités (ligne pleine) vs <b>sans</b> (pointillés).</p>
   </div></details>`;
   bindInputs();
+  (function(){   // câblage du mode churn (renouvellement) — hors data-path
+    const tog=document.getElementById('renewToggle');
+    if(tog) tog.addEventListener('change',()=>{ A.renewalMode=tog.checked; if(A.renewalMode&&!A.renewCond)A.renewCond=[0.46,0.55,0.64,0.73,0.77,0.85].slice();
+      const f=document.getElementById('renewFields'); if(f)f.style.display=A.renewalMode?'':'none'; recompute(); saveState('auto'); });
+    document.querySelectorAll('#assumptions [data-rcond]').forEach(el=>{ el.addEventListener('input',()=>{
+      if(!A.renewCond)A.renewCond=[0.46,0.55,0.64,0.73,0.77,0.85].slice(); const j=+el.dataset.rcond, n=parseFloat(el.value);
+      A.renewCond[j]=isNaN(n)?0:n/100; clearTimeout(debounce); debounce=setTimeout(()=>{recompute();saveState('auto');},160); }); });
+  })();
   document.getElementById('saveBtn').onclick=()=>saveState('manuel');
   document.getElementById('exportBtn').onclick=exportJSON;
   document.getElementById('hostBtn').onclick=buildHostedFile;
@@ -702,7 +731,7 @@ function applyPath(path,v){
 function resizeArrays(){const N=A.horizon;while(A.meta.length<N)A.meta.push(A.meta[A.meta.length-1]||0);}
 let debounce;
 function bindInputs(){
-  document.querySelectorAll('#assumptions input,#assumptions select').forEach(el=>{
+  document.querySelectorAll('#assumptions input:not(.renewctl),#assumptions select').forEach(el=>{
     const h=()=>{applyPath(el.dataset.path,el.value);updateEcon();
       clearTimeout(debounce);debounce=setTimeout(()=>{recompute();if(['horizon','startY','startM'].includes(el.dataset.path)){buildAcqTable();buildGrowthInputs();}},140);};
     el.addEventListener('input',h); if(el.tagName==='SELECT')el.addEventListener('change',h);
@@ -997,11 +1026,12 @@ function skey(){ return scenario==='A' ? STORAGE_KEY : STORAGE_KEY+'_'+scenario;
 function switchScenario(s){
   if(s===scenario)return;
   saveState('auto');                 // persiste le scénario courant
-  const hadTarget=!!localStorage.getItem(STORAGE_KEY+(s==='A'?'':'_'+s));
+  const hadTarget=!!stGet(STORAGE_KEY+(s==='A'?'':'_'+s));
   scenario=s;
   try{history.replaceState(null,'','?s='+s);}catch(e){}
   if(hadTarget) loadState();          // charge les données du scénario s
   /* si pas de données pour s : on garde A tel quel → B démarre comme copie complète, puis on le persiste */
+  else if(s==='B'){ A.renewalMode=true; A.renewCond=[0.46,0.55,0.64,0.73,0.77,0.85]; }   // B démarre en mode « churn au renouvellement »
   saveState('auto');
   buildAssumptions(); buildAcqTable(); syncBulk(); recompute(); buildYearSeg();
   updateScenarioSel();
@@ -1341,11 +1371,19 @@ function cohortCumul(A){
   const eF=k=>P[k].first+(P[k].eliteShare||0)*((P[k].eliteFirst||P[k].first)-P[k].first);
   const eP=k=>P[k].monthly+(P[k].eliteShare||0)*((P[k].elitePrice||P[k].monthly)-P[k].monthly);
   const CYC=P.map(p=>Math.max(1,Math.round(p.cycle||1)));
+  const renew=!!A.renewalMode, rc=A.renewCond||[0.46,0.55,0.64,0.73,0.77,0.85];   // mode renouvellement (quarterly) par scénario
+  let qk=P.findIndex(p=>/quart|trimestr/i.test(p.name||'')); if(qk<0)qk=CYC.findIndex(c=>c===3);
   const cum=[]; let c=0;
   for(let m=0;m<=60;m++){ let cash=0;
-    for(let k=0;k<4;k++){ if(m===0) cash+=P[k].mix*eF(k); else if(m%CYC[k]===0) cash+=P[k].mix*Math.pow(1-P[k].churn,m)*eP(k); }
+    for(let k=0;k<4;k++){
+      if(m===0) cash+=P[k].mix*eF(k);
+      else if(m%CYC[k]===0){
+        if(renew && k===qk){ let s=1; for(let x=0;x<m/CYC[k];x++)s*=(rc[x]!=null?rc[x]:rc[rc.length-1]); cash+=P[k].mix*s*eP(k); }
+        else cash+=P[k].mix*Math.pow(1-P[k].churn,m)*eP(k);
+      }
+    }
     c+=cash; cum.push(c); }
-  return cum;   // cash cumulé encaissé par client acquis (mix), mois par mois
+  return cum;   // cash cumulé encaissé par client acquis (mix), mois par mois (quarterly au renouvellement si renewalMode)
 }
 function paybackAt(cum,cac){ for(let m=0;m<cum.length;m++){ if(cum[m]>=cac) return m; } return Infinity; }
 function buildDrTable(){
