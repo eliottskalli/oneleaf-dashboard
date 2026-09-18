@@ -107,7 +107,7 @@
     <button data-tab="acq">Acquisition mensuelle</button>
     <button data-tab="cash">Trésorerie</button>
     <button data-tab="cashreal">Trésorerie réelle</button>
-    <button data-tab="rbf">RBF Oneleaf</button>
+    <button data-tab="rbf">RBF PVX</button>
     <button data-tab="rbftp">RBF TP</button>
     <button data-tab="eliott">Prêt Eliott</button>
     <button data-tab="datareel">Data réel</button>
@@ -952,7 +952,7 @@ document.getElementById('csvbtn').onclick=()=>{
   const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='oneleaf_monthly.csv';a.click();URL.revokeObjectURL(u);};
 document.getElementById('importFile').onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value='';};
 
-/* ============ RBF Oneleaf : financement de la croissance Meta ============ */
+/* ============ RBF PVX : financement de la croissance Meta ============ */
 /* On finance la depense Meta par du RBF. Chaque avance = spend finance du mois,
    rembourse sur `term` mois au cout `rate`/mois (total ~ rate x term par avance).
    Effet : la grosse sortie Meta (payee a 30 j) est lissee sur `term` mois + un cout de financement. */
