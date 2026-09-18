@@ -338,15 +338,15 @@ function runModel(A,opts){
     subs[m]=subsTotal;
   }
   const R={months:[],mrr_legacy:legArr,mrr_new:newArr,mrr_total:totArr,upsell_rev:upsArr,net_rev:netArr,cash_rev:cashArr,active_subs:subs,clients:clients,upg:upgArr,meta_spend:meta,
-    payfee:[],hosting:[],support:[],content:[],total_cogs:[],gross_profit:[],gross_margin:[],
+    payfee:[],refund:[],hosting:[],support:[],content:[],total_cogs:[],gross_profit:[],gross_margin:[],
     meta:[],salaries:[],software:[],ga:[],accounting:[],salestax:[],total_opex:[],ebitda:[],ebitda_margin:[],da:[],ebit:[],
     capex:[],timing:[],bill_timing:[],bpi_cf:[],net_cf:[],cash_beg:[],cash_end:[],cash_nobpi:[],arr:[]};
   const start=new Date(A.startY,A.startM-1,1); let prev=A.startcash, prevNo=A.startcash;
   for(let m=0;m<N;m++){
     const y=yr(m), net=netArr[m];
-    const payfee=-net*A.payfee, hosting=-subs[m]*A.hostingPerSub;
+    const payfee=-net*A.payfee, refund=-net*(A.refundRate||0), hosting=-subs[m]*A.hostingPerSub;
     const support=-A.support*Math.pow(1+A.supportG,y), content=-A.content*Math.pow(1+A.contentG,y);
-    const cogs=payfee+hosting+support+content, gp=net+cogs;
+    const cogs=payfee+refund+hosting+support+content, gp=net+cogs;
     const metaC=-meta[m], sal=-A.sal*Math.pow(1+A.salG,y), soft=-A.soft*Math.pow(1+A.softG,y), ga=-A.ga*Math.pow(1+A.gaG,y);
     const acc=-A.accounting, stax=-A.salesTax;   // montant fixe par mois
     const opex=metaC+sal+soft+ga+acc+stax, eb=gp+opex, da=-A.da, ebit=eb+da, capex=-A.capex;
@@ -357,7 +357,7 @@ function runModel(A,opts){
     const endNo=prevNo+ncfOp; prevNo=endNo;
     const d=new Date(start.getFullYear(),start.getMonth()+m,1);
     R.months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
-    R.payfee.push(payfee);R.hosting.push(hosting);R.support.push(support);R.content.push(content);
+    R.payfee.push(payfee);R.refund.push(refund);R.hosting.push(hosting);R.support.push(support);R.content.push(content);
     R.total_cogs.push(cogs);R.gross_profit.push(gp);R.gross_margin.push(net?gp/net:0);
     R.meta.push(metaC);R.salaries.push(sal);R.software.push(soft);R.ga.push(ga);R.accounting.push(acc);R.salestax.push(stax);R.total_opex.push(opex);
     R.ebitda.push(eb);R.ebitda_margin.push(net?eb/net:0);R.da.push(da);R.ebit.push(ebit);
@@ -426,7 +426,7 @@ const DEFAULTS={
     {name:'VIP Support',    base:'Nouveaux', attach:0.08, price:39.99, recur:false, churn:0},
     {name:'Calorie tracker',base:'Nouveaux', attach:0.10, price:39.99, recur:true,  churn:0.06}],
   meta:mkMeta(), metaGrowthByYear:{}, cacReal:[],
-  payfee:0, hostingPerSub:0, support:0, supportG:0, content:0, contentG:0,
+  payfee:0, refundRate:0, hostingPerSub:0, support:0, supportG:0, content:0, contentG:0,
   sal:0, salG:0, soft:0, softG:0, ga:0, gaG:0, da:0, capex:0,
   accounting:0, salesTax:0,
   bpiMensualite:10000, bpiMonthsLeft:36
@@ -583,6 +583,7 @@ function buildAssumptions(){
   </div></details>
   <details class="grp"><summary>Coûts variables (COGS) <span class="chev">▶</span></summary><div class="body">
     ${fld('Frais de paiement','payfeePct',pct(a.payfee).toFixed(1),{suffix:'%',ph:1})}
+    ${fld('Refunds (% du CA)','refundPct',pct(a.refundRate).toFixed(1),{suffix:'%',ph:1})}
     ${fld('Hébergement ($/abonné/mo)','hostingPerSub',a.hostingPerSub,{step:0.01,suffix:'$',ph:1})}
     ${fld('Support client ($/mois)','support',a.support,{step:10,suffix:'$',ph:1})}
     ${fld('Croissance support / an','supportGPct',pct(a.supportG).toFixed(1),{suffix:'%'})}
@@ -635,7 +636,7 @@ function updateEcon(){
       return `<b>${p.name}</b> (${(sh*100).toFixed(0)}% Elite) : 1ᵉʳ moyen <b>$${firEff.toFixed(2)}</b> · récurrent moyen <b>$${recEff.toFixed(2)}</b>/cycle`;}).join('<br>') : '<span style="opacity:.7">Aucune part Elite saisie pour l\'instant.</span>';}
 }
 function applyPath(path,v){
-  const pctMap={churnLegPct:'churnLeg',upMtoYPct:'upMtoY',upQtoYPct:'upQtoY',upChurnPct:'upChurn',payfeePct:'payfee',bpiRatePct:'bpiRate',supportGPct:'supportG',contentGPct:'contentG',salGPct:'salG',softGPct:'softG',gaGPct:'gaG'};
+  const pctMap={churnLegPct:'churnLeg',upMtoYPct:'upMtoY',upQtoYPct:'upQtoY',upChurnPct:'upChurn',payfeePct:'payfee',refundPct:'refundRate',bpiRatePct:'bpiRate',supportGPct:'supportG',contentGPct:'contentG',salGPct:'salG',softGPct:'softG',gaGPct:'gaG'};
   if(pctMap[path]){const n=parseFloat(v);A[pctMap[path]]=isNaN(n)?0:n/100;return;}
   if(path.startsWith('products.')){const[,i,key]=path.split('.');const x=+i;
     if(key==='name'){A.products[x].name=v;return;}
@@ -756,7 +757,7 @@ const PNL_ROWS=[
   ['Revenu abonnement — base existante','mrr_legacy'],['Revenu abonnement — acquis','mrr_new'],
   ['Revenu upsells','upsell_rev'],
   ['Chiffre d\'affaires net','net_rev',1],
-  ['  Frais de paiement','payfee',0,1],['  Hébergement','hosting',0,1],['  Support','support',0,1],['  Contenu','content',0,1],
+  ['  Frais de paiement','payfee',0,1],['  Refunds','refund',0,1],['  Hébergement','hosting',0,1],['  Support','support',0,1],['  Contenu','content',0,1],
   ['Marge brute','gross_profit',1],['  Marge brute %','gross_margin',0,0,'pct'],
   ['  Meta','meta',0,1],['  Salaires','salaries',0,1],['  Logiciels','software',0,1],['  G&A','ga',0,1],['  Comptabilité','accounting',0,1],['  Sales tax','salestax',0,1],
   ['EBITDA','ebitda',1],['  EBITDA %','ebitda_margin',0,0,'pct'],['  Amortissements','da',0,1],['EBIT','ebit',1],
