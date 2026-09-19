@@ -1023,6 +1023,21 @@ function recompute(){
 /* ===== Scénarios indépendants (A / B) : chacun = un modèle complet, données séparées ===== */
 let scenario='A';
 function skey(){ return scenario==='A' ? STORAGE_KEY : STORAGE_KEY+'_'+scenario; }
+/* Preset Scénario B : new pricing + rétention mesurée sur cohortes Stripe réelles (35 637 abonnements).
+   Approximation interactive du modèle Excel détaillé (moteur paramétrique, pas cohorte-par-cohorte). */
+function applyScenarioBPreset(){
+  A.cac=92;
+  A.renewalMode=true; A.renewCond=[0.48,0.55,0.65,0.73,0.79,0.82];   // waterfall Quarterly mesurée (new pricing)
+  A.products=[
+    {name:'Weekly',   first:5.10,  monthly:43.99, cycle:1,  mix:0.01, churn:0.45, eliteShare:0,    eliteFirst:5.10,  elitePrice:43.99},
+    {name:'Monthly',  first:9.99,  monthly:43.99, cycle:1,  mix:0.21, churn:0.40, eliteShare:0,    eliteFirst:9.99,  elitePrice:43.99},
+    {name:'Quarterly',first:19.99, monthly:79.99, cycle:3,  mix:0.71, churn:0.17, eliteShare:0.14, eliteFirst:29.99, elitePrice:99.99},
+    {name:'Yearly',   first:119.99,monthly:119.99,cycle:12, mix:0.07, churn:0.05, eliteShare:0,    eliteFirst:119.99,elitePrice:119.99}];
+  A.upsells=[
+    {name:'Ebook',          base:'Nouveaux', attach:0.079, price:9.99,  recur:false, churn:0},
+    {name:'VIP Support',    base:'Nouveaux', attach:0.066, price:39.99, recur:false, churn:0},
+    {name:'Calorie tracker',base:'Nouveaux', attach:0.036, price:39.99, recur:true,  churn:0.04}];
+}
 function switchScenario(s){
   if(s===scenario)return;
   saveState('auto');                 // persiste le scénario courant
@@ -1031,7 +1046,7 @@ function switchScenario(s){
   try{history.replaceState(null,'','?s='+s);}catch(e){}
   if(hadTarget) loadState();          // charge les données du scénario s
   /* si pas de données pour s : on garde A tel quel → B démarre comme copie complète, puis on le persiste */
-  else if(s==='B'){ A.renewalMode=true; A.renewCond=[0.46,0.55,0.64,0.73,0.77,0.85]; }   // B démarre en mode « churn au renouvellement »
+  else if(s==='B'){ applyScenarioBPreset(); }   // B = preset « new pricing / réalité mesurée sur cohortes Stripe »
   saveState('auto');
   buildAssumptions(); buildAcqTable(); syncBulk(); recompute(); buildYearSeg();
   updateScenarioSel();
