@@ -74,7 +74,7 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
       <div class="row"><label>Frais paiement (%)</label><input id="pf" value="3"></div>
       <div class="row"><label>Opex hors salaires $/mois</label><input id="opex" value="8270"></div>
       <div class="row"><label>Salaires $/mois (50k€)</label><input id="sal" value="54000"></div>
-      <div class="row"><label>BPI $/mois</label><input id="bpi" value="13300"></div>
+      <div class="row"><label>BPI $/trim (Déc/Mar/Jun/Sep)</label><input id="bpi" value="39900"></div>
       <div class="row"><label>Start cash ($)</label><input id="start" value="75000"></div>
       <div class="row"><label>IAP (% du Meta)</label><input id="iap" value="4.08"></div>
     </div>
@@ -130,7 +130,7 @@ function build(){
   for(let c=-1;c<N;c++){let cf=[];for(let a=0;a<=HREC;a++)cf.push(acq*cpsAge(a));cohortFull[c]=cf;
     if(c>=0)for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newcash[t]+=cf[a]}}
   let iap=[],revc=[],mp=[],costs=[],baseNcf=[];
-  for(let t=0;t<N;t++){iap[t]=IAPr*META;revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-META;costs[t]=-OPEX-BPI;baseNcf[t]=revc[t]+mp[t]+costs[t]}
+  for(let t=0;t<N;t++){iap[t]=IAPr*META;revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-META;costs[t]=-OPEX-((t%3===2)?BPI:0);baseNcf[t]=revc[t]+mp[t]+costs[t]}
   function feeTP(pb){return Math.max(V('tpb')/100, V('tpb')/100+(V('tpm')/100)*(pb-2))}
   function feePV(pb){return V('pxb')/100+(V('pxm')/100)*(pb-1)}
   function run(ratio,share,feefn){let ov=new Array(N).fill(0),tadv=0,tfee=0,peak=0,ca=0,cp=0,adv=new Array(N).fill(0),prin=new Array(N).fill(0);
