@@ -46,7 +46,9 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
     </div>
 
     <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">ACQUISITION</label></div>
-      <div class="row"><label>Meta $/mois (flat)</label><input id="meta" value="250000"></div>
+      <div class="row"><label>Meta $/mois (départ)</label><input id="meta" value="250000"></div>
+      <div class="row"><label>Croissance Meta %/mois</label><input id="mgrow" value="0"></div>
+      <div class="row"><label>Plafond Meta $/mois</label><input id="mcap" value="1500000"></div>
       <div class="row"><label>CAC ($)</label><input id="cac" value="92"></div>
     </div>
 
@@ -93,7 +95,7 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
 
   <div>
     <div class="kpis" id="kpis"></div>
-    <div class="chartcard"><h2>Trésorerie mensuelle — les 3 financements</h2><canvas id="chart" height="150"></canvas></div>
+    <div class="chartcard"><h2>Trésorerie mensuelle — les 3 financements</h2><div style="height:360px;position:relative"><canvas id="chart"></canvas></div></div>
     <div class="tblwrap"><table id="tbl"></table></div>
     <div class="note" id="footnote"></div>
   </div>
@@ -125,16 +127,18 @@ function build(){
   for(let yr=1;yr<8;yr++)if(12*yr<=HREC)ups[12*yr]+=net(0.036*Math.pow(0.96,12*yr)*39.99);
   const cpsAge=a=>{let s=0;for(const t in MIX)s+=MIX[t]*CBA[t][a];return s+ups[a]};
   let LTV=0;for(let a=0;a<=HREC;a++)LTV+=cpsAge(a);
-  const acq=META/CAC;
+  const grow=V('mgrow')/100, MCAP=V('mcap');
+  let meta=new Array(N);for(let t=0;t<N;t++)meta[t]=Math.min(MCAP,META*Math.pow(1+grow,t));
+  const metaOf=c=>(c<0?META:meta[c]);
   let newcash=new Array(N).fill(0), cohortFull={};
-  for(let c=-1;c<N;c++){let cf=[];for(let a=0;a<=HREC;a++)cf.push(acq*cpsAge(a));cohortFull[c]=cf;
+  for(let c=-1;c<N;c++){let ac=metaOf(c)/CAC;let cf=[];for(let a=0;a<=HREC;a++)cf.push(ac*cpsAge(a));cohortFull[c]=cf;
     if(c>=0)for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newcash[t]+=cf[a]}}
   let iap=[],revc=[],mp=[],costs=[],baseNcf=[];
-  for(let t=0;t<N;t++){iap[t]=IAPr*META;revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-META;costs[t]=-OPEX-((t%3===2)?BPI:0);baseNcf[t]=revc[t]+mp[t]+costs[t]}
+  for(let t=0;t<N;t++){iap[t]=IAPr*meta[t];revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-(t===0?META:meta[t-1]);costs[t]=-OPEX-((t%3===2)?BPI:0);baseNcf[t]=revc[t]+mp[t]+costs[t]}
   function feeTP(pb){return Math.max(V('tpb')/100, V('tpb')/100+(V('tpm')/100)*(pb-2))}
   function feePV(pb){return V('pxb')/100+(V('pxm')/100)*(pb-1)}
   function run(ratio,share,feefn){let ov=new Array(N).fill(0),tadv=0,tfee=0,peak=0,ca=0,cp=0,adv=new Array(N).fill(0),prin=new Array(N).fill(0);
-    if(ratio>0)for(let c=-1;c<N;c++){let a=ratio*META;tadv+=a;let am=c+1;if(am>=0&&am<N){ov[am]+=a;adv[am]+=a}
+    if(ratio>0)for(let c=-1;c<N;c++){let a=ratio*metaOf(c);tadv+=a;let am=c+1;if(am>=0&&am<N){ov[am]+=a;adv[am]+=a}
       let P=a,cc=cohortFull[c];for(let age=0;age<=HREC;age++){let rm=Math.max(c+1,c+age),take=Math.min(share*cc[age],P);P-=take;
         if(rm>=0&&rm<N){ov[rm]-=take;prin[rm]+=take}
         if(P<=1e-6){let pb=Math.max(1,rm-c),f=a*feefn(pb);tfee+=f;let fm=c+pb;if(fm>=0&&fm<N)ov[fm]-=f;break}}}
@@ -152,7 +156,7 @@ function build(){
   // chart
   const ds=[['Self-funded',SC.sf.clo,'#C0392B'],['TP 80/100',SC.tp.clo,'#345C8C'],['PvX carveout',SC.px.clo,'#2C7A52']];
   const data={labels:LAB,datasets:ds.map(([l,d,c])=>({label:l,data:d.map(x=>Math.round(x)),borderColor:c,backgroundColor:'transparent',borderWidth:2.2,pointRadius:0,tension:.25}))};
-  if(chart){chart.data=data;chart.update()}else{chart=new Chart(g('chart'),{type:'line',data,options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}}}})}
+  if(chart){chart.data=data;chart.update()}else{chart=new Chart(g('chart'),{type:'line',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}}}})}
   // table
   const rows=[['Base réelle (run-off)',BASE],['Nouvelles cohortes',newcash],['IAP',iap],['= Revenue collected',revc,1],
     ['Meta (-)',mp],['Coûts (opex+BPI)',costs],['Closing — Self-funded',SC.sf.clo,2],['Closing — TP 80/100',SC.tp.clo,2],['Closing — PvX carveout',SC.px.clo,2]];
