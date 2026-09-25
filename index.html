@@ -98,7 +98,7 @@
     <div><h1>One Leaf — Modèle financier</h1>
     <div class="sub">Meta ÷ CAC → clients → produits (prix/churn/mix) → MRR → trésorerie · USD</div></div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div class="seg" id="scenarioSel"><button data-s="A" class="on">Scénario A</button><button data-s="B">Scénario B</button></div>
+      <div class="seg" id="scenarioSel"><button data-s="A" class="on">Scénario A</button><button data-s="B">Scénario B</button><button data-s="C" title="Modèle 100% data réelle (waterfall)">Scénario C · data réelle ↗</button></div>
       <div class="sub" id="stamp"></div>
     </div>
   </div>
@@ -1055,7 +1055,7 @@ function updateScenarioSel(){
   document.querySelectorAll('#scenarioSel button').forEach(b=>b.classList.toggle('on',b.dataset.s===scenario));
   document.getElementById('stamp').textContent='Scénario '+scenario+' · recalcul local';
 }
-document.getElementById('scenarioSel').onclick=e=>{const b=e.target.closest('button');if(b)switchScenario(b.dataset.s);};
+document.getElementById('scenarioSel').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.s==='C'){window.open('oneleaf_scenarioC.html','_blank');return;}switchScenario(b.dataset.s);};
 function buildYearSeg(){
   const seg=document.getElementById('yearseg'), ys=['ALL',...years()];
   seg.innerHTML=ys.map(y=>`<button data-y="${y}" class="${y===curYear?'on':''}">${y==='ALL'?'5 ans':y}</button>`).join('');
