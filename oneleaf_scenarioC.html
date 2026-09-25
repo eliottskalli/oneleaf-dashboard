@@ -1,0 +1,168 @@
+<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OneLeaf — Scenario C (data réelle)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#F4F1E9;--ink:#22402F;--sage:#5C6A60;--gold:#B8973C;--card:#fff;--line:#E2DED2;--red:#C0392B;--blue:#345C8C;--green:#2C7A52}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,Inter,Segoe UI,sans-serif;padding:26px 30px 60px}
+h1{font-size:26px} .sub{color:var(--sage);font-size:14px;margin-top:4px;max-width:900px}
+.wrap{display:grid;grid-template-columns:360px 1fr;gap:24px;margin-top:22px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.panel h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:12px}
+.grp{margin-bottom:18px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:7px 0;font-size:13.5px}
+.row label{color:var(--sage);flex:1}
+.row input{width:96px;text-align:right;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:13.5px;font-variant-numeric:tabular-nums}
+.readonly{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.kpi .t{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--sage);font-weight:600}
+.kpi .low{font-size:30px;font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums}
+.kpi .sm{font-size:13px;color:var(--sage);margin-top:6px}
+.chartcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:18px}
+.chartcard h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+table{border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums;width:100%}
+th,td{border:1px solid var(--line);padding:4px 7px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
+.tblwrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;overflow:auto;max-height:460px}
+.neg{color:var(--red)} .pos{color:var(--green)}
+.note{font-size:12px;color:var(--sage);margin-top:8px;line-height:1.5}
+.pill{display:inline-block;background:#EDE8D9;color:var(--gold);font-weight:700;font-size:11px;padding:3px 9px;border-radius:20px;letter-spacing:.5px}
+</style></head>
+<body>
+<h1>OneLeaf — Scenario C <span class="pill">100% DATA RÉELLE</span></h1>
+<div class="sub">Base réelle (export Stripe, 11 416 actifs, MRR $289 471) en run-off + nouvelles cohortes Meta + rétention waterfall calée sur ta R1 mesurée. Change n'importe quelle variable à gauche — tout se recalcule. USD.</div>
+
+<div class="wrap">
+  <div class="panel">
+    <h2>Variables (tout est éditable)</h2>
+
+    <div class="grp"><div class="row"><label>MRR book brut (actuel)</label><span class="readonly">$289 471</span></div>
+      <div class="row"><label>Abonnés actifs</label><span class="readonly">11 416</span></div>
+      <div class="row"><label>LTV résiduelle réelle de la base</label><span class="readonly">$1,70M</span></div>
+      <div class="note"><b>⚠️ Le MRR $289k / ARR $3,47M est du "book ARR" brut, gonflé par la croissance des 3 derniers mois</b> — beaucoup d'abonnés frais n'ont pas encore prouvé leur 1er renouvellement. <b>Le modèle n'utilise PAS ce chiffre comme durable.</b> Il fait le run-off <b>sub par sub</b> en escomptant le prochain renouvellement de chaque abonné par ta <b>R1 mesurée (~48-50%)</b> → d'où la décroissance rapide de la base et une LTV résiduelle réelle de seulement <b>$1,70M</b> (pas $3,47M×années).</div>
+    </div>
+
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">ACQUISITION</label></div>
+      <div class="row"><label>Meta $/mois (flat)</label><input id="meta" value="250000"></div>
+      <div class="row"><label>CAC ($)</label><input id="cac" value="92"></div>
+    </div>
+
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">PRICING (récurrent $)</label></div>
+      <div class="row"><label>Quarterly Premium</label><input id="qp" value="79.99"></div>
+      <div class="row"><label>Quarterly Elite</label><input id="qe" value="99.99"></div>
+      <div class="row"><label>Elite share (%)</label><input id="eshare" value="16"></div>
+      <div class="row"><label>Monthly</label><input id="mp" value="43.99"></div>
+      <div class="row"><label>Yearly</label><input id="yp" value="119.99"></div>
+      <div class="row"><label>Mix Q / M / W / Y (%)</label><span class="readonly">72 / 19 / 2 / 7</span></div>
+    </div>
+
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">RÉTENTION (renouv. %)</label></div>
+      <div class="row"><label>Quarterly R1 / R2 / R3</label>
+        <span><input id="qr1" value="48" style="width:44px"><input id="qr2" value="55" style="width:44px"><input id="qr3" value="65" style="width:44px"></span></div>
+      <div class="row"><label>Quarterly R4+ (plateau)</label><input id="qpl" value="80"></div>
+      <div class="row"><label>Monthly R1 / R2 / R3</label>
+        <span><input id="mr1" value="50" style="width:44px"><input id="mr2" value="50" style="width:44px"><input id="mr3" value="64" style="width:44px"></span></div>
+      <div class="row"><label>Monthly R4+ (plateau)</label><input id="mpl" value="83"></div>
+      <div class="row"><label>Yearly R1 (plateau)</label><input id="yr1" value="55"></div>
+    </div>
+
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">COÛTS & CASH</label></div>
+      <div class="row"><label>Refunds (%)</label><input id="ref" value="3"></div>
+      <div class="row"><label>Frais paiement (%)</label><input id="pf" value="3"></div>
+      <div class="row"><label>Opex hors salaires $/mois</label><input id="opex" value="8270"></div>
+      <div class="row"><label>Salaires $/mois (50k€)</label><input id="sal" value="54000"></div>
+      <div class="row"><label>BPI $/mois</label><input id="bpi" value="13300"></div>
+      <div class="row"><label>Start cash ($)</label><input id="start" value="75000"></div>
+      <div class="row"><label>IAP (% du Meta)</label><input id="iap" value="4.08"></div>
+    </div>
+
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">FINANCEMENT</label></div>
+      <div class="row"><label>TP — financé / recoup (%)</label><span><input id="tpr" value="80" style="width:44px"><input id="tps" value="100" style="width:44px"></span></div>
+      <div class="row"><label>TP — frais base + /mois (%)</label><span><input id="tpb" value="2.90" style="width:56px"><input id="tpm" value="0.70" style="width:56px"></span></div>
+      <div class="row"><label>PvX — financé / recoup (%)</label><span><input id="pxr" value="70.3" style="width:44px"><input id="pxs" value="70.3" style="width:44px"></span></div>
+      <div class="row"><label>PvX — frais base + /mois (%)</label><span><input id="pxb" value="1.90" style="width:56px"><input id="pxm" value="0.75" style="width:56px"></span></div>
+    </div>
+
+    <div class="grp"><div class="row"><label>LTV cohorte (calculée)</label><span class="readonly" id="ltvOut">—</span></div>
+      <div class="row"><label>LTV / CAC</label><span class="readonly" id="lcOut">—</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="kpis" id="kpis"></div>
+    <div class="chartcard"><h2>Trésorerie mensuelle — les 3 financements</h2><canvas id="chart" height="150"></canvas></div>
+    <div class="tblwrap"><table id="tbl"></table></div>
+    <div class="note" id="footnote"></div>
+  </div>
+</div>
+
+<script>
+const N=63, MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const LAB=(()=>{let a=[],y=2026,m=9;for(let t=0;t<N;t++){a.push(MO[m]+' '+String(y).slice(2));m++;if(m==12){m=0;y++}}return a})();
+// BASE RÉELLE run-off (from Stripe export, sub-by-sub, churn-adjusted) — série fixe
+const BASE=[150015,135136,125236,93093,81862,78157,64624,63616,63152,57180,54684,50718,38101,37439,36580,33241,28333,27692,25881,26170,26729,26157,25327,23384,17360,17400,17146,15972,12723,12483,12240,12688,13341,13745,13430,12005,8317,8641,8611,8315,5995,5948,6165,6685,7230,7938,7771,6746,4306,4683,4734,4758,3028,2964,3354,3803,4275,5037,4955,4174,2474,2849,2821];
+const HREC=80, MIX={W:0.02,M:0.19,Q:0.72,Y:0.07};
+const g=id=>document.getElementById(id), V=id=>parseFloat(g(id).value)||0;
+let chart;
+function wfCurve(r1,r2,r3,pl){let a=[r1,r2,r3];for(let i=3;i<HREC;i++)a.push(pl);return a}
+function build(){
+  const REF=V('ref')/100, PF=V('pf')/100, CAC=V('cac'), META=V('meta'), START=V('start');
+  const OPEX=V('opex')+V('sal'), BPI=V('bpi'), IAPr=V('iap')/100;
+  const es=V('eshare')/100;
+  const qIntro=(1-es)*19.99+es*29.99, qRec=(1-es)*V('qp')+es*V('qe');
+  const PRICE={W:[5.19,V('mp'),1],M:[9.99,V('mp'),1],Y:[V('yp'),V('yp'),12],Q:[qIntro,qRec,3]};
+  const WF={1:wfCurve(V('mr1')/100,V('mr2')/100,V('mr3')/100,V('mpl')/100),
+            3:wfCurve(V('qr1')/100,V('qr2')/100,V('qr3')/100,V('qpl')/100),
+            12:wfCurve(V('yr1')/100,V('yr1')/100,V('yr1')/100,V('yr1')/100)};
+  const net=x=>x*(1-REF)*(1-PF);
+  function cba(t){const[intro,rec,c]=PRICE[t];let a=new Array(HREC+1).fill(0);a[0]=net(intro);let s=1;
+    for(let j=0;j<HREC;j++){let age=c*(j+1);if(age>HREC)break;s*=WF[c][j];a[age]+=net(rec)*s}return a}
+  const CBA={};for(const t in MIX)CBA[t]=cba(t);
+  let ups=new Array(HREC+1).fill(0);ups[0]=net(0.079*9.99+0.066*39.99+0.036*39.99);
+  for(let yr=1;yr<8;yr++)if(12*yr<=HREC)ups[12*yr]+=net(0.036*Math.pow(0.96,12*yr)*39.99);
+  const cpsAge=a=>{let s=0;for(const t in MIX)s+=MIX[t]*CBA[t][a];return s+ups[a]};
+  let LTV=0;for(let a=0;a<=HREC;a++)LTV+=cpsAge(a);
+  const acq=META/CAC;
+  let newcash=new Array(N).fill(0), cohortFull={};
+  for(let c=-1;c<N;c++){let cf=[];for(let a=0;a<=HREC;a++)cf.push(acq*cpsAge(a));cohortFull[c]=cf;
+    if(c>=0)for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newcash[t]+=cf[a]}}
+  let iap=[],revc=[],mp=[],costs=[],baseNcf=[];
+  for(let t=0;t<N;t++){iap[t]=IAPr*META;revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-META;costs[t]=-OPEX-BPI;baseNcf[t]=revc[t]+mp[t]+costs[t]}
+  function feeTP(pb){return Math.max(V('tpb')/100, V('tpb')/100+(V('tpm')/100)*(pb-2))}
+  function feePV(pb){return V('pxb')/100+(V('pxm')/100)*(pb-1)}
+  function run(ratio,share,feefn){let ov=new Array(N).fill(0),tadv=0,tfee=0,peak=0,ca=0,cp=0,adv=new Array(N).fill(0),prin=new Array(N).fill(0);
+    if(ratio>0)for(let c=-1;c<N;c++){let a=ratio*META;tadv+=a;let am=c+1;if(am>=0&&am<N){ov[am]+=a;adv[am]+=a}
+      let P=a,cc=cohortFull[c];for(let age=0;age<=HREC;age++){let rm=Math.max(c+1,c+age),take=Math.min(share*cc[age],P);P-=take;
+        if(rm>=0&&rm<N){ov[rm]-=take;prin[rm]+=take}
+        if(P<=1e-6){let pb=Math.max(1,rm-c),f=a*feefn(pb);tfee+=f;let fm=c+pb;if(fm>=0&&fm<N)ov[fm]-=f;break}}}
+    let clo=[],op=START;for(let t=0;t<N;t++){op+=baseNcf[t]+ov[t];clo.push(op);ca+=adv[t];cp+=prin[t];peak=Math.max(peak,ca-cp)}
+    let low=Math.min(...clo);return{clo,low,lowm:clo.indexOf(low),end:clo[N-1],fee:tfee,peak}}
+  const SC={sf:run(0,0,null),tp:run(V('tpr')/100,V('tps')/100,feeTP),px:run(V('pxr')/100,V('pxs')/100,feePV)};
+  // KPIs
+  g('ltvOut').textContent='$'+LTV.toFixed(0);g('lcOut').textContent=(LTV/CAC).toFixed(2);
+  const f=n=>(n<0?'-$':'$')+Math.abs(Math.round(n)).toLocaleString('en-US');
+  const cards=[['Self-funded','sf','var(--red)'],['TP 80/100','tp','var(--blue)'],['PvX carveout','px','var(--green)']];
+  g('kpis').innerHTML=cards.map(([nm,k,c])=>{let d=SC[k];return `<div class="kpi"><div class="t">${nm}</div>
+    <div class="low ${d.low<0?'neg':'pos'}">${f(d.low)}</div>
+    <div class="sm">point bas · ${LAB[d.lowm]}</div>
+    <div class="sm">fin 2031 <b>${f(d.end)}</b>${k!=='sf'?' · frais '+f(d.fee):''}</div></div>`}).join('');
+  // chart
+  const ds=[['Self-funded',SC.sf.clo,'#C0392B'],['TP 80/100',SC.tp.clo,'#345C8C'],['PvX carveout',SC.px.clo,'#2C7A52']];
+  const data={labels:LAB,datasets:ds.map(([l,d,c])=>({label:l,data:d.map(x=>Math.round(x)),borderColor:c,backgroundColor:'transparent',borderWidth:2.2,pointRadius:0,tension:.25}))};
+  if(chart){chart.data=data;chart.update()}else{chart=new Chart(g('chart'),{type:'line',data,options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}}}})}
+  // table
+  const rows=[['Base réelle (run-off)',BASE],['Nouvelles cohortes',newcash],['IAP',iap],['= Revenue collected',revc,1],
+    ['Meta (-)',mp],['Coûts (opex+BPI)',costs],['Closing — Self-funded',SC.sf.clo,2],['Closing — TP 80/100',SC.tp.clo,2],['Closing — PvX carveout',SC.px.clo,2]];
+  let h='<thead><tr><th>$ / mois</th>'+LAB.map(l=>'<th>'+l+'</th>').join('')+'</tr></thead><tbody>';
+  for(const[nm,arr,b] of rows){h+='<tr'+(b==1?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(b==2?' style="font-weight:600"':'')+'>'+nm+'</td>'+
+    arr.map(x=>'<td class="'+(x<0?'neg':'')+'">'+Math.round(x).toLocaleString('en-US')+'</td>').join('')+'</tr>'}
+  g('tbl').innerHTML=h+'</tbody>';
+  g('footnote').innerHTML='<b>Logique :</b> Revenue collected = base réelle (run-off) + nouvelles cohortes (Meta÷CAC, rétention waterfall) + IAP. Moins Meta et coûts = net cash flow. Le RBF avance <b>ratio%</b> du Meta à M+1 et prélève <b>recoup%</b> du cash cohorte en priorité jusqu\'à remboursement ; frais au payback. Base réelle = série fixe issue de l\'export Stripe (11 416 actifs, churn-adjusted).';
+}
+document.querySelectorAll('input').forEach(i=>i.addEventListener('input',build));
+build();
+</script>
+</body></html>
