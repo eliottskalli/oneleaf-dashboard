@@ -75,7 +75,7 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
       <div class="row"><label>Refunds (%)</label><input id="ref" value="3"></div>
       <div class="row"><label>Frais paiement (%)</label><input id="pf" value="3"></div>
       <div class="row"><label>Opex hors salaires $/mois</label><input id="opex" value="8270"></div>
-      <div class="row"><label>Salaires $/mois (50k€)</label><input id="sal" value="54000"></div>
+      <div class="row"><label>Salaires $/mois</label><input id="sal" value="45000"></div>
       <div class="row"><label>BPI $/trim (Déc/Mar/Jun/Sep)</label><input id="bpi" value="39900"></div>
       <div class="row"><label>Start cash ($)</label><input id="start" value="75000"></div>
       <div class="row"><label>IAP (% du Meta)</label><input id="iap" value="4.08"></div>
@@ -97,6 +97,7 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
     <div class="kpis" id="kpis"></div>
     <div class="chartcard"><h2>Trésorerie mensuelle — les 3 financements</h2><div style="height:360px;position:relative"><canvas id="chart"></canvas></div></div>
     <div class="tblwrap"><table id="tbl"></table></div>
+    <div class="chartcard" style="margin-top:18px"><h2>Plan annuel — 5 ans</h2><div style="overflow:auto"><table id="atbl"></table></div></div>
     <div class="note" id="footnote"></div>
   </div>
 </div>
@@ -106,6 +107,8 @@ const N=63, MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const LAB=(()=>{let a=[],y=2026,m=9;for(let t=0;t<N;t++){a.push(MO[m]+' '+String(y).slice(2));m++;if(m==12){m=0;y++}}return a})();
 // BASE RÉELLE run-off (from Stripe export, sub-by-sub, churn-adjusted) — série fixe
 const BASE=[150015,135136,125236,93093,81862,78157,64624,63616,63152,57180,54684,50718,38101,37439,36580,33241,28333,27692,25881,26170,26729,26157,25327,23384,17360,17400,17146,15972,12723,12483,12240,12688,13341,13745,13430,12005,8317,8641,8611,8315,5995,5948,6165,6685,7230,7938,7771,6746,4306,4683,4734,4758,3028,2964,3354,3803,4275,5037,4955,4174,2474,2849,2821];
+// MRR run-rate de la base réelle (churn-adjusted) — pour l'ARR annuel
+const BMRR=[224411,181559,146584,127601,110952,95689,86364,77595,69292,63244,57580,52400,48923,45646,42533,39907,37579,35316,33249,31186,29113,27174,25320,23584,22299,21047,19829,18736,17771,16826,15958,15094,14216,13370,12573,11829,11257,10691,10141,9639,9206,8783,8380,7979,7567,7164,6774,6415,6150,5885,5623,5381,5183,4988,4799,4603,4398,4190,3987,3804,3673,3539,3407];
 const HREC=80, MIX={W:0.02,M:0.19,Q:0.72,Y:0.07};
 const g=id=>document.getElementById(id), V=id=>parseFloat(g(id).value)||0;
 let chart;
@@ -164,6 +167,17 @@ function build(){
   for(const[nm,arr,b] of rows){h+='<tr'+(b==1?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(b==2?' style="font-weight:600"':'')+'>'+nm+'</td>'+
     arr.map(x=>'<td class="'+(x<0?'neg':'')+'">'+Math.round(x).toLocaleString('en-US')+'</td>').join('')+'</tr>'}
   g('tbl').innerHTML=h+'</tbody>';
+  // ===== PLAN ANNUEL 5 ANS =====
+  function mrrAge(a){let s=0;for(const tt in MIX){const p=PRICE[tt],c=p[2];let sv=1;for(let j=0;j<Math.floor(a/c);j++)sv*=WF[c][j];s+=MIX[tt]*sv*((a<c?p[0]:p[1])/c)}return s}
+  let newmrr=new Array(N).fill(0);
+  for(let c=0;c<N;c++){let ac=meta[c]/CAC;for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newmrr[t]+=ac*mrrAge(a)}}
+  let arr=[];for(let t=0;t<N;t++)arr[t]=(BMRR[t]+newmrr[t])*12;
+  const YR=[2026,2027,2028,2029,2030,2031], YM={2026:[0,2],2027:[3,14],2028:[15,26],2029:[27,38],2030:[39,50],2031:[51,62]};
+  const sm=(A,y)=>{let s=0;for(let t=YM[y][0];t<=YM[y][1];t++)s+=A[t];return s}, ye=(A,y)=>A[YM[y][1]];
+  const arows=[['ARR (fin d\'année)',y=>ye(arr,y),'b'],['Revenue collected',y=>sm(revc,y),''],['Meta spend',y=>-sm(mp,y),''],['Coûts (opex+BPI)',y=>-sm(costs,y),''],['Net cash flow',y=>sm(baseNcf,y),''],['Cash fin — Self-funded',y=>ye(SC.sf.clo,y),'c'],['Cash fin — TP 80/100',y=>ye(SC.tp.clo,y),'c'],['Cash fin — PvX carveout',y=>ye(SC.px.clo,y),'c']];
+  let ah='<thead><tr><th>$ / an</th>'+YR.map(y=>'<th>'+y+'</th>').join('')+'</tr></thead><tbody>';
+  for(const[nm,fn,st] of arows){ah+='<tr'+(st==='b'?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(st==='c'?' style="font-weight:600"':'')+'>'+nm+'</td>'+YR.map(y=>{let v=Math.round(fn(y));return '<td class="'+(v<0?'neg':'')+'">'+v.toLocaleString('en-US')+'</td>'}).join('')+'</tr>'}
+  g('atbl').innerHTML=ah+'</tbody>';
   g('footnote').innerHTML='<b>Logique :</b> Revenue collected = base réelle (run-off) + nouvelles cohortes (Meta÷CAC, rétention waterfall) + IAP. Moins Meta et coûts = net cash flow. Le RBF avance <b>ratio%</b> du Meta à M+1 et prélève <b>recoup%</b> du cash cohorte en priorité jusqu\'à remboursement ; frais au payback. Base réelle = série fixe issue de l\'export Stripe (11 416 actifs, churn-adjusted).';
 }
 document.querySelectorAll('input').forEach(i=>i.addEventListener('input',build));
