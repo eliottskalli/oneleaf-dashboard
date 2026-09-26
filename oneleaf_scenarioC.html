@@ -35,23 +35,31 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
 </style></head>
 <body>
 <h1>OneLeaf — Scenario C <span class="pill">100% DATA RÉELLE</span></h1>
-<div class="sub">Base réelle (export Stripe, 11 416 actifs, MRR $289 471) en run-off + nouvelles cohortes Meta + rétention waterfall calée sur ta R1 mesurée. Change n'importe quelle variable à gauche — tout se recalcule. USD.</div>
+<div class="sub">Base réelle (export Stripe, 11 416 actifs, MRR réel <b>$220k</b> = €204k) en run-off + nouvelles cohortes Meta (blend web + yearly mobile) + rétention waterfall calée sur ta R1 mesurée. Change n'importe quelle variable à gauche — tout se recalcule. USD.</div>
 
 <div class="wrap">
   <div class="panel">
     <h2>Variables (tout est éditable)</h2>
 
-    <div class="grp"><div class="row"><label>MRR book brut (actuel)</label><span class="readonly">$289 471</span></div>
+    <div class="grp"><div class="row"><label>MRR réel (FX-converti)</label><span class="readonly">$220k · €204k</span></div>
+      <div class="row"><label>ARR réel (qualité-ajusté)</label><span class="readonly">~$2,27M</span></div>
       <div class="row"><label>Abonnés actifs</label><span class="readonly">11 416</span></div>
       <div class="row"><label>LTV résiduelle réelle de la base</label><span class="readonly">$1,70M</span></div>
-      <div class="note"><b>⚠️ Le MRR $289k / ARR $3,47M est du "book ARR" brut, gonflé par la croissance des 3 derniers mois</b> — beaucoup d'abonnés frais n'ont pas encore prouvé leur 1er renouvellement. <b>Le modèle n'utilise PAS ce chiffre comme durable.</b> Il fait le run-off <b>sub par sub</b> en escomptant le prochain renouvellement de chaque abonné par ta <b>R1 mesurée (~48-50%)</b> → d'où la décroissance rapide de la base et une LTV résiduelle réelle de seulement <b>$1,70M</b> (pas $3,47M×années).</div>
+      <div class="note"><b>⚠️ Le book ARR ($289k×12 = $3,47M) est trompeur</b> : 64% des abonnés (7 304) n'ont payé QUE l'intro, pas encore prouvé leur 1er renouv. <b>Le vrai ARR ≈ $2,27M</b> (prouvés à plein + intro escomptés par ta R1 48% mesurée). Le modèle fait le run-off <b>sub par sub</b> à ta R1 réelle → LTV résiduelle de la base $1,70M. À défendre en externe : <b>~$2,2M d'ARR</b>, jamais $3,47M.</div>
     </div>
 
     <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">ACQUISITION</label></div>
-      <div class="row"><label>Meta $/mois (départ)</label><input id="meta" value="250000"></div>
+      <div class="row"><label>Meta $/mois (départ)</label><input id="meta" value="150000"></div>
       <div class="row"><label>Croissance Meta %/mois</label><input id="mgrow" value="0"></div>
       <div class="row"><label>Plafond Meta $/mois</label><input id="mcap" value="1500000"></div>
       <div class="row"><label>CAC ($)</label><input id="cac" value="92"></div>
+    </div>
+
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">COHORTE YEARLY MOBILE (même CAC)</label></div>
+      <div class="row"><label>% signups → yearly mobile</label><input id="pmob" value="10"></div>
+      <div class="row"><label>Prix yearly mobile $</label><input id="myp" value="119.99"></div>
+      <div class="row"><label>Commission store %</label><input id="mcom" value="15"></div>
+      <div class="row"><label>Rétention yearly mobile %/an</label><input id="mret" value="15"></div>
     </div>
 
     <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">PRICING (récurrent $)</label></div>
@@ -131,12 +139,17 @@ function build(){
   let ups=new Array(HREC+1).fill(0);ups[0]=net(0.079*9.99+0.066*39.99+0.036*39.99);
   for(let yr=1;yr<8;yr++)if(12*yr<=HREC)ups[12*yr]+=net(0.036*Math.pow(0.96,12*yr)*39.99);
   const cpsAge=a=>{let s=0;for(const t in MIX)s+=MIX[t]*CBA[t][a];return s+ups[a]};
-  let LTV=0;for(let a=0;a<=HREC;a++)LTV+=cpsAge(a);
+  // COHORTE YEARLY MOBILE — même CAC : PMOB% des signups atterrissent en yearly $ mobile, net de commission store, rétention annuelle (souvent ~15%)
+  const PMOB=V('pmob')/100, MYP=V('myp'), MCOM=V('mcom')/100, MRET=V('mret')/100;
+  const mNet=MYP*(1-MCOM)*(1-REF);                       // cash net encaissé D+0 par sub mobile
+  const mcpsAge=a=>(a%12===0? mNet*Math.pow(MRET,a/12):0);
+  const blend=a=>(1-PMOB)*cpsAge(a)+PMOB*mcpsAge(a);     // cash cohorte blendé (web + mobile)
+  let LTV=0;for(let a=0;a<=HREC;a++)LTV+=blend(a);
   const grow=V('mgrow')/100, MCAP=V('mcap');
   let meta=new Array(N);for(let t=0;t<N;t++)meta[t]=Math.min(MCAP,META*Math.pow(1+grow,t));
   const metaOf=c=>(c<0?META:meta[c]);
   let newcash=new Array(N).fill(0), cohortFull={};
-  for(let c=-1;c<N;c++){let ac=metaOf(c)/CAC;let cf=[];for(let a=0;a<=HREC;a++)cf.push(ac*cpsAge(a));cohortFull[c]=cf;
+  for(let c=-1;c<N;c++){let ac=metaOf(c)/CAC;let cf=[];for(let a=0;a<=HREC;a++)cf.push(ac*blend(a));cohortFull[c]=cf;
     if(c>=0)for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newcash[t]+=cf[a]}}
   let iap=[],revc=[],mp=[],costs=[],baseNcf=[];
   for(let t=0;t<N;t++){iap[t]=IAPr*meta[t];revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-(t===0?META:meta[t-1]);costs[t]=-OPEX-((t%3===2)?BPI:0);baseNcf[t]=revc[t]+mp[t]+costs[t]}
@@ -171,8 +184,9 @@ function build(){
   g('tbl').innerHTML=h+'</tbody>';
   // ===== PLAN ANNUEL 5 ANS =====
   function mrrAge(a){let s=0;for(const tt in MIX){const p=PRICE[tt],c=p[2];let sv=1;for(let j=0;j<Math.floor(a/c);j++)sv*=WF[c][j];s+=MIX[tt]*sv*((a<c?p[0]:p[1])/c)}return s}
+  const mMrrAge=a=>(mNet/12)*Math.pow(MRET,Math.floor(a/12));
   let newmrr=new Array(N).fill(0);
-  for(let c=0;c<N;c++){let ac=meta[c]/CAC;for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newmrr[t]+=ac*mrrAge(a)}}
+  for(let c=0;c<N;c++){let ac=meta[c]/CAC;for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newmrr[t]+=ac*((1-PMOB)*mrrAge(a)+PMOB*mMrrAge(a))}}
   let arr=[];for(let t=0;t<N;t++)arr[t]=(BMRR[t]+newmrr[t])*12;
   const YR=[2026,2027,2028,2029,2030,2031], YM={2026:[0,2],2027:[3,14],2028:[15,26],2029:[27,38],2030:[39,50],2031:[51,62]};
   const sm=(A,y)=>{let s=0;for(let t=YM[y][0];t<=YM[y][1];t++)s+=A[t];return s}, ye=(A,y)=>A[YM[y][1]];
@@ -180,7 +194,7 @@ function build(){
   let ah='<thead><tr><th>$ / an</th>'+YR.map(y=>'<th>'+y+'</th>').join('')+'</tr></thead><tbody>';
   for(const[nm,fn,st] of arows){ah+='<tr'+(st==='b'?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(st==='c'?' style="font-weight:600"':'')+'>'+nm+'</td>'+YR.map(y=>{let v=Math.round(fn(y));return '<td class="'+(v<0?'neg':'')+'">'+v.toLocaleString('en-US')+'</td>'}).join('')+'</tr>'}
   g('atbl').innerHTML=ah+'</tbody>';
-  g('footnote').innerHTML='<b>Logique :</b> Revenue collected = base réelle (run-off) + nouvelles cohortes (Meta÷CAC, rétention waterfall) + IAP. Moins Meta et coûts = net cash flow. Le RBF avance <b>ratio%</b> du Meta à M+1 et prélève <b>recoup%</b> du cash cohorte en priorité jusqu\'à remboursement ; frais au payback. Base réelle = série fixe issue de l\'export Stripe (11 416 actifs, churn-adjusted).';
+  g('footnote').innerHTML='<b>Logique :</b> Revenue collected = base réelle (run-off) + nouvelles cohortes + IAP. Chaque cohorte Meta (au même CAC) est un <b>blend web + yearly mobile</b> : PMOB% des signups atterrissent en yearly $ mobile encaissé d\'avance, net de commission store, rétention annuelle. Le yearly mobile est cash-positif D+0 si CAC &lt; net encaissé, mais compound peu (rétention ~15%). Moins Meta et coûts = net cash flow. Le RBF avance <b>ratio%</b> du Meta à M+1 et prélève <b>recoup%</b> du cash cohorte en priorité jusqu\'à remboursement ; frais au payback. Base réelle = série fixe issue de l\'export Stripe (11 416 actifs, churn-adjusted).';
 }
 document.querySelectorAll('input').forEach(i=>i.addEventListener('input',build));
 build();
