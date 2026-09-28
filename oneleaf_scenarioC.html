@@ -35,7 +35,7 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
 </style></head>
 <body>
 <h1>OneLeaf — Scenario C <span class="pill">100% DATA RÉELLE</span></h1>
-<div class="sub">Base réelle (export Stripe, 11 416 actifs, MRR réel <b>$220k</b> = €204k) en run-off + nouvelles cohortes Meta (blend web + yearly mobile) + rétention waterfall calée sur ta R1 mesurée. Change n'importe quelle variable à gauche — tout se recalcule. USD.</div>
+<div class="sub">Base réelle (export Stripe, 11 416 actifs, MRR réel <b>$220k</b> = €204k) en run-off + nouvelles cohortes Meta (blend web + mobile App Store yearly+quarterly) + rétention waterfall calée sur ta R1 mesurée. Change n'importe quelle variable à gauche — tout se recalcule. USD.</div>
 
 <div class="wrap">
   <div class="panel">
@@ -50,13 +50,15 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
 
     <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">ACQUISITION</label></div>
       <div class="row"><label>Meta $/mois (départ)</label><input id="meta" value="150000"></div>
+      <div class="row"><label title="Meta facture à 30 jours : la dépense de septembre est prélevée en octobre">Facture Meta sept. $ (payée en oct.)</label><input id="metaPrev" value="255000"></div>
       <div class="row"><label>Croissance Meta %/mois</label><input id="mgrow" value="0"></div>
       <div class="row"><label>Plafond Meta $/mois</label><input id="mcap" value="1500000"></div>
       <div class="row"><label>CAC ($)</label><input id="cac" value="92"></div>
     </div>
 
-    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">COHORTE YEARLY MOBILE (même CAC)</label></div>
-      <div class="row"><label>% signups → yearly mobile</label><input id="pmob" value="10"></div>
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">COHORTE MOBILE App Store (même CAC)</label></div>
+      <div class="row"><label>% signups → mobile</label><input id="pmob" value="10"></div>
+      <div class="row"><label>dont yearly (%)</label><input id="myshare" value="65"></div>
       <div class="row"><label>Prix yearly mobile $</label><input id="myp" value="119.99"></div>
       <div class="row"><label>Commission store %</label><input id="mcom" value="15"></div>
       <div class="row"><label>Rétention yearly mobile %/an</label><input id="mret" value="15"></div>
@@ -88,7 +90,7 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
       <div class="row"><label>Salaires $/mois</label><input id="sal" value="45000"></div>
       <div class="row"><label>BPI $/trim (Déc/Mar/Jun/Sep)</label><input id="bpi" value="39900"></div>
       <div class="row"><label>Start cash ($)</label><input id="start" value="75000"></div>
-      <div class="row"><label>IAP (% du Meta)</label><input id="iap" value="4.08"></div>
+      <div class="row"><label>IAP one-shot (% du Meta)</label><input id="iap" value="0"></div>
     </div>
 
     <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">FINANCEMENT</label></div>
@@ -147,20 +149,24 @@ function build(){
   let ups=new Array(HREC+1).fill(0);ups[0]=net(0.079*9.99+0.066*39.99+0.036*39.99);
   for(let yr=1;yr<8;yr++)if(12*yr<=HREC)ups[12*yr]+=net(0.036*Math.pow(0.96,12*yr)*39.99);
   const cpsAge=a=>{let s=0;for(const t in MIX)s+=MIX[t]*CBA[t][a];return s+ups[a]};
-  // COHORTE YEARLY MOBILE — même CAC : PMOB% des signups atterrissent en yearly $ mobile, net de commission store, rétention annuelle (souvent ~15%)
-  const PMOB=V('pmob')/100, MYP=V('myp'), MCOM=V('mcom')/100, MRET=V('mret')/100;
-  const mNet=MYP*(1-MCOM)*(1-REF);                       // cash net encaissé D+0 par sub mobile
-  const mcpsAge=a=>(a%12===0? mNet*Math.pow(MRET,a/12):0);
-  const blend=a=>(1-PMOB)*cpsAge(a)+PMOB*mcpsAge(a);     // cash cohorte blendé (web + mobile)
+  // COHORTE MOBILE App Store — même CAC : PMOB% des signups s'abonnent sur mobile (net commission store). Split MYSH% yearly (encaissé d'avance, rétention MRET) + reste quarterly (même waterfall que le web, ajusté de la coupe store). Aucun double compte avec l'IAP.
+  const PMOB=V('pmob')/100, MYSH=V('myshare')/100, MYP=V('myp'), MCOM=V('mcom')/100, MRET=V('mret')/100;
+  const mNet=MYP*(1-MCOM)*(1-REF);                       // cash net encaissé D+0 par yearly mobile
+  const storeAdj=(1-MCOM)/(1-PF);                        // convertit le net web (frais paiement) en net store (coupe Apple)
+  const myAge=a=>(a%12===0? mNet*Math.pow(MRET,a/12):0); // yearly mobile
+  const mqAge=a=>CBA.Q[a]*storeAdj;                      // quarterly mobile = courbe quarterly web, coupe store
+  const mcpsAge=a=>MYSH*myAge(a)+(1-MYSH)*mqAge(a);
+  const blend=a=>(1-PMOB)*cpsAge(a)+PMOB*mcpsAge(a);     // cash cohorte blendé (web + mobile yearly+quarterly)
   let LTV=0;for(let a=0;a<=HREC;a++)LTV+=blend(a);
   const grow=V('mgrow')/100, MCAP=V('mcap');
   let meta=new Array(N);for(let t=0;t<N;t++)meta[t]=Math.min(MCAP,META*Math.pow(1+grow,t));
-  const metaOf=c=>(c<0?META:meta[c]);
+  const MPREV=V('metaPrev')||META;                       // facture net 30 : la dépense réelle de septembre est payée en octobre
+  const metaOf=c=>(c<0?MPREV:meta[c]);
   let newcash=new Array(N).fill(0), cohortFull={};
   for(let c=-1;c<N;c++){let ac=metaOf(c)/CAC;let cf=[];for(let a=0;a<=HREC;a++)cf.push(ac*blend(a));cohortFull[c]=cf;
     if(c>=0)for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newcash[t]+=cf[a]}}
   let iap=[],revc=[],mp=[],costs=[],baseNcf=[];
-  for(let t=0;t<N;t++){iap[t]=IAPr*meta[t];revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-(t===0?META:meta[t-1]);costs[t]=-OPEX-((t%3===2)?BPI:0);baseNcf[t]=revc[t]+mp[t]+costs[t]}
+  for(let t=0;t<N;t++){iap[t]=IAPr*meta[t];revc[t]=BASE[t]+newcash[t]+iap[t];mp[t]=-metaOf(t-1);costs[t]=-OPEX-((t%3===2)?BPI:0);baseNcf[t]=revc[t]+mp[t]+costs[t]}
   function feeTP(pb){return Math.max(V('tpb')/100, V('tpb')/100+(V('tpm')/100)*(pb-2))}
   function feePV(pb){return V('pxb')/100+(V('pxm')/100)*(pb-1)}
   function run(ratio,share,feefn){let ov=new Array(N).fill(0),tadv=0,tfee=0,peak=0,ca=0,cp=0,adv=new Array(N).fill(0),prin=new Array(N).fill(0);
@@ -192,14 +198,15 @@ function build(){
   if(chart){chart.data=data;chart.update()}else{chart=new Chart(g('chart'),{type:'line',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}}}})}
   // table
   const rows=[['Base réelle (run-off)',BASE],['Nouvelles cohortes',newcash],['IAP',iap],['= Revenue collected',revc,1],
-    ['Meta (-)',mp],['Coûts (opex+BPI)',costs],['Closing — Self-funded',SC.sf.clo,2],['Closing — TP 80/100',SC.tp.clo,2],['Closing — PvX carveout',SC.px.clo,2],['Closing — Stripe Capital',SC.sc.clo,2]];
+    ['Meta payé (facture M-1)',mp],['Coûts (opex+BPI)',costs],['Closing — Self-funded',SC.sf.clo,2],['Closing — TP 80/100',SC.tp.clo,2],['Closing — PvX carveout',SC.px.clo,2],['Closing — Stripe Capital',SC.sc.clo,2]];
   let h='<thead><tr><th>$ / mois</th>'+LAB.map(l=>'<th>'+l+'</th>').join('')+'</tr></thead><tbody>';
   for(const[nm,arr,b] of rows){h+='<tr'+(b==1?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(b==2?' style="font-weight:600"':'')+'>'+nm+'</td>'+
     arr.map(x=>'<td class="'+(x<0?'neg':'')+'">'+Math.round(x).toLocaleString('en-US')+'</td>').join('')+'</tr>'}
   g('tbl').innerHTML=h+'</tbody>';
   // ===== PLAN ANNUEL 5 ANS =====
   function mrrAge(a){let s=0;for(const tt in MIX){const p=PRICE[tt],c=p[2];let sv=1;for(let j=0;j<Math.floor(a/c);j++)sv*=WF[c][j];s+=MIX[tt]*sv*((a<c?p[0]:p[1])/c)}return s}
-  const mMrrAge=a=>(mNet/12)*Math.pow(MRET,Math.floor(a/12));
+  const mqMrr=a=>{let sv=1;for(let j=0;j<Math.floor(a/3);j++)sv*=WF[3][j];return sv*((a<3?PRICE.Q[0]:PRICE.Q[1])/3)*storeAdj};
+  const mMrrAge=a=>MYSH*(mNet/12)*Math.pow(MRET,Math.floor(a/12))+(1-MYSH)*mqMrr(a);
   let newmrr=new Array(N).fill(0);
   for(let c=0;c<N;c++){let ac=meta[c]/CAC;for(let a=0;a<=HREC;a++){let t=c+a;if(t<N)newmrr[t]+=ac*((1-PMOB)*mrrAge(a)+PMOB*mMrrAge(a))}}
   let arr=[];for(let t=0;t<N;t++)arr[t]=(BMRR[t]+newmrr[t])*12;
@@ -209,7 +216,7 @@ function build(){
   let ah='<thead><tr><th>$ / an</th>'+YR.map(y=>'<th>'+y+'</th>').join('')+'</tr></thead><tbody>';
   for(const[nm,fn,st] of arows){ah+='<tr'+(st==='b'?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(st==='c'?' style="font-weight:600"':'')+'>'+nm+'</td>'+YR.map(y=>{let v=Math.round(fn(y));return '<td class="'+(v<0?'neg':'')+'">'+v.toLocaleString('en-US')+'</td>'}).join('')+'</tr>'}
   g('atbl').innerHTML=ah+'</tbody>';
-  g('footnote').innerHTML='<b>Logique :</b> Revenue collected = base réelle (run-off) + nouvelles cohortes + IAP. Chaque cohorte Meta (au même CAC) est un <b>blend web + yearly mobile</b> : PMOB% des signups atterrissent en yearly $ mobile encaissé d\'avance, net de commission store, rétention annuelle. Le yearly mobile est cash-positif D+0 si CAC &lt; net encaissé, mais compound peu (rétention ~15%). Moins Meta et coûts = net cash flow. Le RBF avance <b>ratio%</b> du Meta à M+1 et prélève <b>recoup%</b> du cash cohorte en priorité jusqu\'à remboursement ; frais au payback. Base réelle = série fixe issue de l\'export Stripe (11 416 actifs, churn-adjusted).';
+  g('footnote').innerHTML='<b>Logique :</b> Revenue collected = base réelle (run-off) + nouvelles cohortes + IAP one-shot. Chaque cohorte Meta (même CAC) est un <b>blend web + mobile App Store</b> : PMOB% des signups s\'abonnent sur mobile (net de la coupe Apple) — dont MYSH% en <b>yearly</b> encaissé d\'avance (rétention faible ~15%, cash-positif D+0) et le reste en <b>quarterly</b> (même waterfall que le web, ajusté de la commission store). <b>Pas de double compte :</b> la ligne IAP ne compte QUE de vrais achats one-shot (0 par défaut ; tes abos mobile sont désormais dans les cohortes, plus dans l\'IAP). <b>Meta payé à 30 jours</b> : la sortie du mois M = la dépense de M-1. Le RBF avance <b>ratio%</b> du Meta à M+1 et prélève <b>recoup%</b> du cash cohorte jusqu\'à remboursement ; frais au payback. Base réelle = série fixe issue de l\'export Stripe (11 416 actifs, churn-adjusted).';
 }
 document.querySelectorAll('input').forEach(i=>i.addEventListener('input',build));
 build();
