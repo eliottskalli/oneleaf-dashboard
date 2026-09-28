@@ -17,7 +17,7 @@ body{overflow-x:hidden}
 .row label{color:var(--sage);flex:1}
 .row input{width:96px;text-align:right;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:13.5px;font-variant-numeric:tabular-nums}
 .readonly{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
 .kpi .t{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--sage);font-weight:600}
 .kpi .low{font-size:30px;font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums}
@@ -98,6 +98,14 @@ thead th{background:#EEE9DA;color:var(--ink);position:sticky;top:0}
       <div class="row"><label>PvX — frais base + /mois (%)</label><span><input id="pxb" value="1.90" style="width:56px"><input id="pxm" value="0.75" style="width:56px"></span></div>
     </div>
 
+    <div class="grp"><div class="row"><label style="color:var(--gold);font-weight:700">STRIPE CAPITAL (prêt %-transactions)</label></div>
+      <div class="row"><label>Montant € (avance)</label><input id="scamt" value="150000"></div>
+      <div class="row"><label>Frais fixe €</label><input id="scfee" value="18749"></div>
+      <div class="row"><label>% par transaction</label><input id="scpct" value="21.9"></div>
+      <div class="row"><label>Mois de prise (0 = Oct 26)</label><input id="scm" value="0"></div>
+      <div class="row"><label>FX €→$</label><input id="scfx" value="1.15"></div>
+    </div>
+
     <div class="grp"><div class="row"><label>LTV cohorte (calculée)</label><span class="readonly" id="ltvOut">—</span></div>
       <div class="row"><label>LTV / CAC</label><span class="readonly" id="lcOut">—</span></div>
     </div>
@@ -162,22 +170,29 @@ function build(){
         if(P<=1e-6){let pb=Math.max(1,rm-c),f=a*feefn(pb);tfee+=f;let fm=c+pb;if(fm>=0&&fm<N)ov[fm]-=f;break}}}
     let clo=[],op=START;for(let t=0;t<N;t++){op+=baseNcf[t]+ov[t];clo.push(op);ca+=adv[t];cp+=prin[t];peak=Math.max(peak,ca-cp)}
     let low=Math.min(...clo);return{clo,low,lowm:clo.indexOf(low),end:clo[N-1],fee:tfee,peak}}
-  const SC={sf:run(0,0,null),tp:run(V('tpr')/100,V('tps')/100,feeTP),px:run(V('pxr')/100,V('pxs')/100,feePV)};
+  // Stripe Capital : avance €×FX à M scm, remboursée par pct% des encaissements Stripe (base + cohortes, hors IAP/mobile app-store) jusqu'à total = (montant+frais)×FX
+  function runSC(){let ov=new Array(N).fill(0);
+    const FX=V('scfx'),amt=V('scamt')*FX,tot=(V('scamt')+V('scfee'))*FX,pct=V('scpct')/100,mm=Math.round(V('scm'));
+    if(amt>0){if(mm>=0&&mm<N)ov[mm]+=amt;let rem=tot;
+      for(let t=Math.max(0,mm);t<N&&rem>1e-6;t++){let sr=BASE[t]+newcash[t];let pay=Math.min(pct*sr,rem);ov[t]-=pay;rem-=pay}}
+    let clo=[],op=START;for(let t=0;t<N;t++){op+=baseNcf[t]+ov[t];clo.push(op)}
+    let low=Math.min(...clo);return{clo,low,lowm:clo.indexOf(low),end:clo[N-1],fee:V('scfee')*V('scfx'),peak:0}}
+  const SC={sf:run(0,0,null),tp:run(V('tpr')/100,V('tps')/100,feeTP),px:run(V('pxr')/100,V('pxs')/100,feePV),sc:runSC()};
   // KPIs
   g('ltvOut').textContent='$'+LTV.toFixed(0);g('lcOut').textContent=(LTV/CAC).toFixed(2);
   const f=n=>(n<0?'-$':'$')+Math.abs(Math.round(n)).toLocaleString('en-US');
-  const cards=[['Self-funded','sf','var(--red)'],['TP 80/100','tp','var(--blue)'],['PvX carveout','px','var(--green)']];
+  const cards=[['Self-funded','sf','var(--red)'],['TP 80/100','tp','var(--blue)'],['PvX carveout','px','var(--green)'],['Stripe Capital','sc','#635BFF']];
   g('kpis').innerHTML=cards.map(([nm,k,c])=>{let d=SC[k];return `<div class="kpi"><div class="t">${nm}</div>
     <div class="low ${d.low<0?'neg':'pos'}">${f(d.low)}</div>
     <div class="sm">point bas · ${LAB[d.lowm]}</div>
     <div class="sm">fin 2031 <b>${f(d.end)}</b>${k!=='sf'?' · frais '+f(d.fee):''}</div></div>`}).join('');
   // chart
-  const ds=[['Self-funded',SC.sf.clo,'#C0392B'],['TP 80/100',SC.tp.clo,'#345C8C'],['PvX carveout',SC.px.clo,'#2C7A52']];
+  const ds=[['Self-funded',SC.sf.clo,'#C0392B'],['TP 80/100',SC.tp.clo,'#345C8C'],['PvX carveout',SC.px.clo,'#2C7A52'],['Stripe Capital',SC.sc.clo,'#635BFF']];
   const data={labels:LAB,datasets:ds.map(([l,d,c])=>({label:l,data:d.map(x=>Math.round(x)),borderColor:c,backgroundColor:'transparent',borderWidth:2.2,pointRadius:0,tension:.25}))};
   if(chart){chart.data=data;chart.update()}else{chart=new Chart(g('chart'),{type:'line',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}}}})}
   // table
   const rows=[['Base réelle (run-off)',BASE],['Nouvelles cohortes',newcash],['IAP',iap],['= Revenue collected',revc,1],
-    ['Meta (-)',mp],['Coûts (opex+BPI)',costs],['Closing — Self-funded',SC.sf.clo,2],['Closing — TP 80/100',SC.tp.clo,2],['Closing — PvX carveout',SC.px.clo,2]];
+    ['Meta (-)',mp],['Coûts (opex+BPI)',costs],['Closing — Self-funded',SC.sf.clo,2],['Closing — TP 80/100',SC.tp.clo,2],['Closing — PvX carveout',SC.px.clo,2],['Closing — Stripe Capital',SC.sc.clo,2]];
   let h='<thead><tr><th>$ / mois</th>'+LAB.map(l=>'<th>'+l+'</th>').join('')+'</tr></thead><tbody>';
   for(const[nm,arr,b] of rows){h+='<tr'+(b==1?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(b==2?' style="font-weight:600"':'')+'>'+nm+'</td>'+
     arr.map(x=>'<td class="'+(x<0?'neg':'')+'">'+Math.round(x).toLocaleString('en-US')+'</td>').join('')+'</tr>'}
@@ -190,7 +205,7 @@ function build(){
   let arr=[];for(let t=0;t<N;t++)arr[t]=(BMRR[t]+newmrr[t])*12;
   const YR=[2026,2027,2028,2029,2030,2031], YM={2026:[0,2],2027:[3,14],2028:[15,26],2029:[27,38],2030:[39,50],2031:[51,62]};
   const sm=(A,y)=>{let s=0;for(let t=YM[y][0];t<=YM[y][1];t++)s+=A[t];return s}, ye=(A,y)=>A[YM[y][1]];
-  const arows=[['ARR (fin d\'année)',y=>ye(arr,y),'b'],['Revenue collected',y=>sm(revc,y),''],['Meta spend',y=>-sm(mp,y),''],['Coûts (opex+BPI)',y=>-sm(costs,y),''],['Net cash flow',y=>sm(baseNcf,y),''],['Cash fin — Self-funded',y=>ye(SC.sf.clo,y),'c'],['Cash fin — TP 80/100',y=>ye(SC.tp.clo,y),'c'],['Cash fin — PvX carveout',y=>ye(SC.px.clo,y),'c']];
+  const arows=[['ARR (fin d\'année)',y=>ye(arr,y),'b'],['Revenue collected',y=>sm(revc,y),''],['Meta spend',y=>-sm(mp,y),''],['Coûts (opex+BPI)',y=>-sm(costs,y),''],['Net cash flow',y=>sm(baseNcf,y),''],['Cash fin — Self-funded',y=>ye(SC.sf.clo,y),'c'],['Cash fin — TP 80/100',y=>ye(SC.tp.clo,y),'c'],['Cash fin — PvX carveout',y=>ye(SC.px.clo,y),'c'],['Cash fin — Stripe Capital',y=>ye(SC.sc.clo,y),'c']];
   let ah='<thead><tr><th>$ / an</th>'+YR.map(y=>'<th>'+y+'</th>').join('')+'</tr></thead><tbody>';
   for(const[nm,fn,st] of arows){ah+='<tr'+(st==='b'?' style="font-weight:600;background:#F3EFE2"':'')+'><td'+(st==='c'?' style="font-weight:600"':'')+'>'+nm+'</td>'+YR.map(y=>{let v=Math.round(fn(y));return '<td class="'+(v<0?'neg':'')+'">'+v.toLocaleString('en-US')+'</td>'}).join('')+'</tr>'}
   g('atbl').innerHTML=ah+'</tbody>';
